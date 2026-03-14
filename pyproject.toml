@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "ytdownloader"
+version = "1.0.0"
+description = "Production-grade YouTube indirici masaüstü uygulaması"
+requires-python = ">=3.11"
+
+dependencies = [
+    "yt-dlp>=2024.1.0",
+    "ttkbootstrap>=1.10.1",
+    "Pillow>=10.0.0",
+    "requests>=2.31.0",
+    "matplotlib>=3.7.0",
+    "pystray>=0.19.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "ruff>=0.1.0",
+    "mypy>=1.5",
+    "pre-commit>=3.5",
+    "pip-audit>=2.6",
+]
+
+[project.scripts]
+ytdownloader = "ytdownloader.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ytdownloader*"]
+
+# ── Ruff (linter + formatter) ─────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]   # satır uzunluğu ruff formatter halleder
+
+# ── mypy ─────────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true   # tkinter stub yok
+
+# ── pytest ────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["ytdownloader/tests"]
+addopts   = "-v --tb=short"
