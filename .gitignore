@@ -11,8 +11,7 @@ build/
 *.spec.bak
 
 # ── FFmpeg binary'leri (büyük dosyalar) ───────────────────────
-ytdownloader/assets/ffmpeg/*.exe
-ytdownloader/assets/ffmpeg/*.dll
+ytdownloader/assets/ffmpeg/
 
 # ── Python önbelleği ──────────────────────────────────────────
 __pycache__/
