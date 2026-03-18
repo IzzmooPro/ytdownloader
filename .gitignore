@@ -3,6 +3,7 @@ PROJE_NOTU.md
 Başlat.bat
 BUILD.bat
 build_exe.spec
+README.txt
 
 # ── PyInstaller çıktıları ──────────────────────────────────────
 dist/

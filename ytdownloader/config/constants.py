@@ -12,7 +12,7 @@ APP_AUTHOR = "IzzmooPro"
 SETTINGS_DIR_NAME = "MyYouTubeDownloader"
 
 # GitHub güncelleme kontrolü
-GITHUB_REPO = ""          # "kullanici/repo" formatında doldurun
+GITHUB_REPO = "IzzmooPro/ytdownloader"
 UPDATE_CHECK_DELAY_MS = 2000
 
 # İndirme varsayılanları
