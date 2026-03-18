@@ -1,0 +1,43 @@
+# ── Kişisel / Gizli ───────────────────────────────────────────
+PROJE_NOTU.md
+Başlat.bat
+BUILD.bat
+build_exe.spec
+
+# ── PyInstaller çıktıları ──────────────────────────────────────
+dist/
+build/
+*.spec.bak
+
+# ── FFmpeg binary'leri (büyük dosyalar) ───────────────────────
+ytdownloader/assets/ffmpeg/*.exe
+ytdownloader/assets/ffmpeg/*.dll
+
+# ── Python önbelleği ──────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# ── Sanal ortam ───────────────────────────────────────────────
+venv/
+.venv/
+env/
+
+# ── Log dosyaları ─────────────────────────────────────────────
+*.log
+logs/
+
+# ── Geçici / sistem dosyaları ─────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+*.bak
+
+# ── Ayarlar (kullanıcıya özel) ────────────────────────────────
+ytdownloader/config/settings.json
+
+# ── İndirme geçmişi ───────────────────────────────────────────
+ytdownloader/config/history.json
