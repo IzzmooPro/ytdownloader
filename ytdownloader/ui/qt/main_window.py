@@ -343,14 +343,6 @@ class MainWindow(QMainWindow):
         self._a_settings.triggered.connect(self._open_settings)
         self._m_tools.addAction(self._a_settings)
 
-        self._a_check_update = QAction(self)
-        self._a_check_update.triggered.connect(self._check_update)
-        self._m_tools.addAction(self._a_check_update)
-        from ytdownloader.config.constants import GITHUB_REPO
-        self._a_check_update.setVisible(bool(GITHUB_REPO))
-
-        self._m_tools.addSeparator()
-
         self._m_tools.addSeparator()
 
         # yt-dlp güncelleme (şimdilik gizli)
@@ -571,7 +563,6 @@ class MainWindow(QMainWindow):
         self._a_save_list.setText(t("listeyi_kaydet"))
         self._a_quit.setText(t("cikis"))
         self._a_settings.setText(t("ayarlar"))
-        self._a_check_update.setText(t("guncelleme_kontrol"))
         self._a_kullanim.setText(t("kullanim"))
         self._a_about.setText(t("hakkinda"))
 
@@ -1058,9 +1049,6 @@ class MainWindow(QMainWindow):
         auth = getattr(self.download_manager, '_auth_service', None)
         dlg = AuthDialog(self, auth)
         dlg.exec()
-
-    def _check_update(self):
-        self._update_service.check(self, show_no_update=True)
 
     def _bulk_format(self, fmt: str):
         """Listedeki idle kartların tümünü aynı formata çevirir."""

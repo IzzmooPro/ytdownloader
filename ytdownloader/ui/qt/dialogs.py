@@ -750,7 +750,9 @@ class AboutDialog(QDialog):
     def _check_updates(self) -> None:
         """Güncelleme kontrolünü UpdateService üzerinden yapar."""
         from ytdownloader.services.update_service import UpdateService
-        UpdateService().check(parent_widget=self, show_no_update=True)
+        # Instance'ı attribute olarak sakla — thread bitmeden GC'ye gitmesin.
+        self._update_svc = UpdateService(self)
+        self._update_svc.check(parent_widget=self, show_no_update=True)
 
     @staticmethod
     def _make_logo(size):
