@@ -7,8 +7,12 @@ import sys
 import os
 from pathlib import Path
 
-# main.py: YouTube Indirici/ kökünde, ytdownloader/ paketiyle yan yana
-_root = Path(__file__).resolve().parent        # .../YouTube Indirici
+# EXE (frozen) modunda __file__ geçici temp klasörüne işaret eder.
+# sys.executable her zaman gerçek EXE'nin bulunduğu kalıcı dizini verir.
+if getattr(sys, "frozen", False):
+    _root = Path(sys.executable).resolve().parent   # kurulu EXE'nin dizini
+else:
+    _root = Path(__file__).resolve().parent         # geliştirme ortamı
 _base = _root / "ytdownloader"
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
