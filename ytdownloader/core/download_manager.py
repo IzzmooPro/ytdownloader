@@ -60,14 +60,16 @@ class DownloadManager:
         self._init_ffmpeg()
 
     def _init_ffmpeg(self):
-        """FFmpeg konumunu tespit edip ydl_opts'a ekler. Sadece program klasörüne bakar."""
+        """FFmpeg konumunu tespit edip ydl_opts'a ekler."""
         import sys as _sys
         ffmpeg_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
+        appdata = os.environ.get("APPDATA") or os.path.expanduser("~")
         candidates = []
         # PyInstaller EXE
         if hasattr(_sys, "_MEIPASS"):
             candidates.append(Path(_sys._MEIPASS) / "ytdownloader" / "assets" / "ffmpeg")
         candidates += [
+            Path(appdata) / "MyYouTubeDownloader" / "ffmpeg",
             self.base_path / "bin",
             self.base_path / "ytdownloader" / "assets" / "ffmpeg",
             self.base_path / "assets" / "ffmpeg",

@@ -81,10 +81,12 @@ class DownloadEngine:
         """FFmpeg klasörünü bir kez tespit eder. Sonuç önbelleğe alınır."""
         import sys as _sys
         ffmpeg_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
+        appdata = os.environ.get("APPDATA") or os.path.expanduser("~")
         candidates = []
         if hasattr(_sys, "_MEIPASS"):
             candidates.append(Path(_sys._MEIPASS) / "ytdownloader" / "assets" / "ffmpeg")
         candidates += [
+            Path(appdata) / "MyYouTubeDownloader" / "ffmpeg",
             self._base_path / "bin",
             self._base_path / "ytdownloader" / "assets" / "ffmpeg",
             self._base_path / "assets" / "ffmpeg",

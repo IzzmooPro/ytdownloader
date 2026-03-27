@@ -97,6 +97,10 @@ def is_ffmpeg_available(base_path=None) -> bool:
     if hasattr(sys, "_MEIPASS"):
         candidates.append(Path(sys._MEIPASS) / "ytdownloader" / "assets" / "ffmpeg")
 
+    # APPDATA altındaki kalıcı kurulum dizini (EXE modunda buraya yüklenir)
+    appdata = os.environ.get("APPDATA") or os.path.expanduser("~")
+    candidates.append(Path(appdata) / "MyYouTubeDownloader" / "ffmpeg")
+
     if base_path:
         candidates += [
             Path(base_path) / "bin",

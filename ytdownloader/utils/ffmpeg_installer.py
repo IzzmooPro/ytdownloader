@@ -25,7 +25,13 @@ APPROX_SIZE_BYTES = 75 * 1024 * 1024  # fallback
 
 
 def _get_install_dir(base_path: Path) -> Path:
-    return base_path / "ytdownloader" / "assets" / "ffmpeg"
+    """
+    FFmpeg kurulum dizini.
+    Program Files gibi kısıtlı dizinlerde izin hatası almamak için
+    her zaman APPDATA altına yükler — orası her kullanıcı için yazılabilir.
+    """
+    appdata = os.environ.get("APPDATA") or os.path.expanduser("~")
+    return Path(appdata) / "MyYouTubeDownloader" / "ffmpeg"
 
 
 def is_installed_locally(base_path) -> bool:
