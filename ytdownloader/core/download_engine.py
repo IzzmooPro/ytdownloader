@@ -26,12 +26,18 @@ from ytdownloader.config.constants import DEFAULT_HTTP_HEADERS
 from ytdownloader.models.download_item import DownloadItem
 from ytdownloader.models.download_state import DownloadState, StateError
 from ytdownloader.infrastructure.state_manager import StateManager
-from ytdownloader.infrastructure.event_bus import EventBus, Events
+from ytdownloader.infrastructure.event_bus import EventBus
 from ytdownloader.infrastructure.logger import get_logger
 from ytdownloader.utils.file_utils import is_ffmpeg_available
 from ytdownloader.core.retry_engine import RetryEngine, RetryConfig
 
 log = get_logger("download_engine")
+
+
+def _is_ssl_error(error: str) -> bool:
+    """SSL/TLS kaynaklı hata mı kontrol eder."""
+    err = error.lower()
+    return any(k in err for k in ("ssl", "certificate", "handshake", "tlsv1", "cert"))
 
 
 class _DownloadCancelledError(Exception):
@@ -244,6 +250,21 @@ class DownloadEngine:
         if opts is None:
             return {"status": "error", "error": "FFmpeg gerekli ama bulunamadı"}
 
+        result = self._run_ydl(item, opts, cancel_ev)
+
+        # SSL hatasında bir kez nocheckcertificate ile yeniden dene
+        if (result.get("status") == "error"
+                and _is_ssl_error(result.get("error", ""))
+                and not cancel_ev.is_set()):
+            log.warning(f"[{item.id}] SSL hatası — nocheckcertificate ile yeniden deneniyor")
+            opts["nocheckcertificate"] = True
+            result = self._run_ydl(item, opts, cancel_ev)
+
+        return result
+
+    def _run_ydl(self, item: DownloadItem, opts: dict,
+                 cancel_ev: threading.Event) -> dict:
+        """Tek bir yt-dlp oturumu çalıştırır. _perform_download tarafından çağrılır."""
         try:
             with YoutubeDL(opts) as ydl:
                 log.debug(f"[{item.id}] yt-dlp başlatıldı")
@@ -263,6 +284,11 @@ class DownloadEngine:
                         pass    # zaten completed olabilir
 
                 final_path = self._organize(info, filename, item)
+                if final_path is None:
+                    return {
+                        "status": "error",
+                        "error":  f"İndirme tamamlandı ama çıktı dosyası bulunamadı: {filename}",
+                    }
                 return {"status": "completed", "file_path": final_path, "info": info}
 
         except _DownloadCancelledError:
@@ -354,7 +380,7 @@ class DownloadEngine:
                     if pct >= last_log + 25:
                         speed_str = f"{speed/1024/1024:.1f} MB/s" if speed else "?"
                         log.info(f"[{download_id}] %{pct:.0f} — {speed_str}")
-                        item._last_log_pct = (int(pct) // 25) * 25
+                        item._last_log_pct = (int(pct) // 25) * 25  # type: ignore[attr-defined]
 
             elif d.get("status") == "finished":
                 self._sm.update_progress(download_id, progress=100)
@@ -373,7 +399,6 @@ class DownloadEngine:
             "quiet":                 True,
             "no_warnings":           True,
             "noplaylist":            True,
-            "nocheckcertificate":    True,
             "geo_bypass":            True,
             "nocache":               True,
             "extractor_retries":     3,
@@ -431,12 +456,16 @@ class DownloadEngine:
 
 
 
-    def _organize(self, info: dict, filename: str, item: DownloadItem) -> str:
-        """Tamamlanan dosyanın gerçek yolunu döner, uzantı değişimini handle eder."""
-        if not os.path.exists(filename):
-            for ext in ("mp4", "webm", "mkv", "mp3", "m4a"):
-                candidate = Path(filename).with_suffix(f".{ext}")
-                if candidate.exists():
-                    filename = str(candidate)
-                    break
-        return filename
+    def _organize(self, info: dict, filename: str, item: DownloadItem) -> str | None:
+        """
+        Tamamlanan dosyanın gerçek yolunu döner, uzantı değişimini handle eder.
+        Dosya hiçbir bilinen uzantıyla bulunamazsa None döner — çağıran hata akışına düşürür.
+        """
+        if os.path.exists(filename):
+            return filename
+        for ext in ("mp4", "webm", "mkv", "mp3", "m4a", "opus", "aac", "ogg", "flac"):
+            candidate = Path(filename).with_suffix(f".{ext}")
+            if candidate.exists():
+                return str(candidate)
+        log.warning(f"[{item.id}] Çıktı dosyası bulunamadı: {filename}")
+        return None

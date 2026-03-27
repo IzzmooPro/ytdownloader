@@ -11,9 +11,8 @@ from ytdownloader.config.constants import DEFAULT_HTTP_HEADERS
 from ytdownloader.models.download_item import DownloadItem
 from ytdownloader.infrastructure.state_manager import StateManager
 from ytdownloader.infrastructure.event_bus import EventBus, Events
-from ytdownloader.core.download_engine import DownloadEngine
+from ytdownloader.core.download_engine import DownloadEngine, _is_ssl_error
 from ytdownloader.infrastructure.logger import get_logger
-from ytdownloader.utils.file_utils import is_ffmpeg_available
 
 log = get_logger("download_manager")
 
@@ -29,7 +28,7 @@ class DownloadManager:
         self._event_bus    = EventBus()
         self._state_manager = StateManager(self._event_bus)
         max_concurrent = settings_service.load().get("max_concurrent", 0)
-        max_workers = max_concurrent if max_concurrent > 0 else 32  # 0 = sınırsız
+        max_workers = max_concurrent if max_concurrent > 0 else 4   # 0 = varsayılan (4)
         self._engine = DownloadEngine(
             state_manager = self._state_manager,
             event_bus     = self._event_bus,
@@ -44,13 +43,15 @@ class DownloadManager:
         self._seq_active: bool = False
         self._seq_lock         = threading.Lock()
 
-        self.downloads: dict = {}
+        self.downloads: dict   = {}
+        # self.downloads üzerindeki read/write/pop işlemlerini worker thread'lerden
+        # korur. Sadece dict erişimlerini kapsar; uzun işlemler lock dışında kalır.
+        self._downloads_lock   = threading.Lock()
 
         self._common_ydl_opts = {
             "quiet":             True,
             "no_warnings":       True,
             "noplaylist":        True,
-            "nocheckcertificate": True,
             "geo_bypass":        True,
             "nocache":           True,
             "extractor_retries": 3,
@@ -78,6 +79,10 @@ class DownloadManager:
                 return
         log.warning("FFmpeg bulunamadı — lokal klasörlerde yok")
 
+    def refresh_ffmpeg(self) -> None:
+        """FFmpeg konumunu yeniden tespit eder. Kurulum sonrası çağrılır."""
+        self._init_ffmpeg()
+
     # ── Public API ──────────────────────────────────────────────────────────
 
     def fetch_video_info(self, url: str, callback) -> None:
@@ -85,15 +90,23 @@ class DownloadManager:
         def _fetch():
             try:
                 log.info(f"Video bilgisi alınıyor: {url}")
-                opts = {**self._common_ydl_opts,
-                        "socket_timeout": 15}
-                # Format belirtme — tüm format listesi gelsin (çözünürlük seçimi için)
-                with YoutubeDL(opts) as ydl:
-                    info = ydl.extract_info(url, download=False)
-                    if "entries" in info:
-                        info = info["entries"][0]
-                    log.info(f"Video bilgisi alındı: {info.get('title', '?')}")
-                    callback(True, info)
+                opts = {**self._common_ydl_opts, "socket_timeout": 15}
+                try:
+                    with YoutubeDL(opts) as ydl:
+                        info = ydl.extract_info(url, download=False)
+                except Exception as e:
+                    # SSL hatasında bir kez fallback dene; diğer hataları ilet
+                    if _is_ssl_error(str(e)):
+                        log.warning(f"Fetch SSL hatası, nocheckcertificate ile yeniden deneniyor: {e}")
+                        opts["nocheckcertificate"] = True
+                        with YoutubeDL(opts) as ydl:
+                            info = ydl.extract_info(url, download=False)
+                    else:
+                        raise
+                if "entries" in info:
+                    info = info["entries"][0]
+                log.info(f"Video bilgisi alındı: {info.get('title', '?')}")
+                callback(True, info)
             except Exception as e:
                 log.error(f"Video bilgisi alınamadı: {e}")
                 callback(False, str(e))
@@ -116,21 +129,50 @@ class DownloadManager:
             self._seq_queue = reordered
 
     def _seq_next(self):
-        """Kuyruktaki bir sonraki indirmeyi başlatır."""
-        with self._seq_lock:
-            if not self._seq_queue:
-                self._seq_active = False
+        """
+        Kuyruktaki bir sonraki indirmeyi başlatır.
+
+        Başarısız başlatma (False veya exception) durumunda:
+          - İlgili item atlanır, kuyruk bir sonraki item ile devam eder.
+          - _seq_active yönetimi while döngüsüyle güvence altına alınmıştır;
+            recursion olmadığı için peş peşe başarısız itemlar stack taşması yaratmaz.
+        """
+        while True:
+            with self._seq_lock:
+                if not self._seq_queue:
+                    self._seq_active = False
+                    return
+                item = self._seq_queue.pop(0)
+                # _seq_active True kalıyor — başlatma girişimi yapılacak.
+
+            download_id, url, options, prog_cb, done_cb = item
+
+            # _dcb default argümanıyla bağlanır; loop closure'ında yanlış
+            # done_cb yakalanma riskini önler.
+            def _wrapped_done(result, _dcb=done_cb):
+                _dcb(result)
+                self._seq_next()
+
+            try:
+                started = self._start_download(
+                    download_id, url, options, prog_cb, _wrapped_done
+                )
+            except Exception as e:
+                log.error(
+                    f"[{download_id}] Sequential start beklenmeyen hata: {e}",
+                    exc_info=True,
+                )
+                started = False
+
+            if started:
+                # Başarıyla başlatıldı. Tamamlandığında _wrapped_done → _seq_next.
                 return
-            item = self._seq_queue.pop(0)
-            self._seq_active = True
 
-        download_id, url, options, prog_cb, done_cb = item
-
-        def _wrapped_done(result):
-            done_cb(result)
-            self._seq_next()
-
-        self._start_download(download_id, url, options, prog_cb, _wrapped_done)
+            # Başarısız — bu item atlanıyor, döngü bir sonrakine geçiyor.
+            log.warning(
+                f"[{download_id}] Sequential start başarısız (zaten var / hata), "
+                f"sonraki item'a geçiliyor"
+            )
 
     def download_video(self, download_id: str, url: str, options: dict,
                        progress_callback, complete_callback) -> bool:
@@ -143,9 +185,12 @@ class DownloadManager:
                 self._seq_queue.append(
                     (download_id, url, options, progress_callback, complete_callback)
                 )
-                if not self._seq_active:
-                    pass  # _seq_next aşağıda çağrılacak
-            if not self._seq_active:
+                # Lock içinde hem kontrol hem işaretle — lock dışı TOCTOU yarışını önler.
+                # İki thread aynı anda buraya giremez; yalnızca biri should_start=True alır.
+                should_start = not self._seq_active
+                if should_start:
+                    self._seq_active = True
+            if should_start:
                 self._seq_next()
             return True
 
@@ -153,9 +198,18 @@ class DownloadManager:
 
     def _start_download(self, download_id: str, url: str, options: dict,
                         progress_callback, complete_callback) -> bool:
-        """Gerçek indirme başlatıcı."""
-        if download_id in self.downloads:
-            return False
+        """
+        Gerçek indirme başlatıcı.
+
+        Thread güvenliği:
+          - self.downloads erişimleri _downloads_lock ile korunur.
+          - Başlatma sırasında (register/engine.start) exception atılırsa
+            EventBus abonelikleri temizlenir ve downloads kaydı silinir;
+            sızıntı olmaz.
+        """
+        with self._downloads_lock:
+            if download_id in self.downloads:
+                return False
 
         # DownloadItem oluştur
         item = DownloadItem(
@@ -170,7 +224,15 @@ class DownloadManager:
             channel       = options.get("channel", ""),
         )
 
-        # Eski API callback'leri EventBus'a bağla
+        # ── Callback tanımları ──────────────────────────────────────────────
+
+        def _unsub_all():
+            """Tüm abonelikleri tek seferde temizler."""
+            self._event_bus.unsubscribe(Events.DOWNLOAD_PROGRESS,  on_progress)
+            self._event_bus.unsubscribe(Events.DOWNLOAD_COMPLETED, on_completed)
+            self._event_bus.unsubscribe(Events.DOWNLOAD_CANCELLED, on_cancelled)
+            self._event_bus.unsubscribe(Events.DOWNLOAD_ERROR,     on_error)
+
         def on_progress(data: dict):
             if data.get("id") == download_id:
                 progress_callback({
@@ -184,11 +246,9 @@ class DownloadManager:
 
         def on_completed(data: dict):
             if data.get("id") == download_id:
-                self._event_bus.unsubscribe(Events.DOWNLOAD_PROGRESS, on_progress)
-                self._event_bus.unsubscribe(Events.DOWNLOAD_COMPLETED, on_completed)
-                self._event_bus.unsubscribe(Events.DOWNLOAD_CANCELLED, on_cancelled)
-                self._event_bus.unsubscribe(Events.DOWNLOAD_ERROR, on_error)
-                self.downloads.pop(download_id, None)
+                _unsub_all()
+                with self._downloads_lock:
+                    self.downloads.pop(download_id, None)
                 final_file = data.get("final_file", "")
                 import os as _os
                 size_bytes = _os.path.getsize(final_file) if final_file and _os.path.exists(final_file) else 0
@@ -204,44 +264,51 @@ class DownloadManager:
 
         def on_cancelled(data: dict):
             if data.get("id") == download_id:
-                self._event_bus.unsubscribe(Events.DOWNLOAD_PROGRESS, on_progress)
-                self._event_bus.unsubscribe(Events.DOWNLOAD_COMPLETED, on_completed)
-                self._event_bus.unsubscribe(Events.DOWNLOAD_CANCELLED, on_cancelled)
-                self._event_bus.unsubscribe(Events.DOWNLOAD_ERROR, on_error)
-                self.downloads.pop(download_id, None)
+                _unsub_all()
+                with self._downloads_lock:
+                    self.downloads.pop(download_id, None)
                 complete_callback(False, "İndirme iptal edildi")
 
         def on_error(data: dict):
             if data.get("id") == download_id:
-                self._event_bus.unsubscribe(Events.DOWNLOAD_PROGRESS, on_progress)
-                self._event_bus.unsubscribe(Events.DOWNLOAD_COMPLETED, on_completed)
-                self._event_bus.unsubscribe(Events.DOWNLOAD_CANCELLED, on_cancelled)
-                self._event_bus.unsubscribe(Events.DOWNLOAD_ERROR, on_error)
-                self.downloads.pop(download_id, None)
+                _unsub_all()
+                with self._downloads_lock:
+                    self.downloads.pop(download_id, None)
                 complete_callback(False, data.get("error_message", "Bilinmeyen hata"))
+
+        # ── Abonelik + başlatma ─────────────────────────────────────────────
 
         self._event_bus.subscribe(Events.DOWNLOAD_PROGRESS,  on_progress)
         self._event_bus.subscribe(Events.DOWNLOAD_COMPLETED, on_completed)
         self._event_bus.subscribe(Events.DOWNLOAD_CANCELLED, on_cancelled)
         self._event_bus.subscribe(Events.DOWNLOAD_ERROR,     on_error)
 
-        # State machine'e kaydet ve başlat
-        self._state_manager.register(item)
-        self.downloads[download_id] = item
-        log.info(f"[{download_id}] Kuyruğa eklendi: {url}")
-        self._engine.start(item)
+        try:
+            # State machine'e kaydet ve motoru başlat.
+            # Bu blok exception atarsa abonelikler ve downloads kaydı temizlenir.
+            self._state_manager.register(item)
+            with self._downloads_lock:
+                self.downloads[download_id] = item
+            log.info(f"[{download_id}] Kuyruğa eklendi: {url}")
+            self._engine.start(item)
+        except Exception:
+            _unsub_all()
+            with self._downloads_lock:
+                self.downloads.pop(download_id, None)
+            raise
+
         return True
 
     def pause_download(self, download_id: str) -> bool:
         log.info(f"[{download_id}] Pause isteği")
-        return self._engine.pause(download_id)
+        return bool(self._engine.pause(download_id))
 
     def resume_download(self, download_id: str) -> bool:
         log.info(f"[{download_id}] Resume isteği")
-        return self._engine.resume(download_id)
+        return bool(self._engine.resume(download_id))
 
     def cancel_download(self, download_id: str) -> bool:
         log.info(f"[{download_id}] Cancel isteği")
-        return self._engine.cancel(download_id)
+        return bool(self._engine.cancel(download_id))
 
 

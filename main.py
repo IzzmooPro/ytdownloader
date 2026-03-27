@@ -159,7 +159,7 @@ def main():
 
     # FFmpeg kurulduysa download manager'ı güncelle
     if _ffmpeg_ok:
-        download_manager._init_ffmpeg()
+        download_manager.refresh_ffmpeg()
 
     exit_code = app.exec()
     # Toast service'i temizle

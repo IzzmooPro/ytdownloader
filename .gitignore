@@ -20,6 +20,15 @@ __pycache__/
 *.pyd
 .Python
 
+# ── Build / tool çıktıları ─────────────────────────────────────
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# ── Claude Code çalışma dosyaları ─────────────────────────────
+.claude/
+
 # ── Sanal ortam ───────────────────────────────────────────────
 venv/
 .venv/

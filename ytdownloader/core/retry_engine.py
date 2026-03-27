@@ -80,7 +80,7 @@ class RetryEngine:
         cfg = self._config
         delay = min(cfg.base_delay * (2 ** (attempt - 1)), cfg.max_delay)
         jitter = random.uniform(-cfg.jitter, cfg.jitter)
-        return max(0.5, delay + jitter)
+        return float(max(0.5, delay + jitter))
 
     def run(self,
             fn: Callable[[], dict],

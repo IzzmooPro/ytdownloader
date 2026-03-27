@@ -9,7 +9,6 @@ Strateji:
 """
 
 import os
-import sys
 import shutil
 import tempfile
 import subprocess
@@ -194,8 +193,7 @@ class AuthService:
 
             # Windows'ta subprocess console penceresini gizle
             if os.name == "nt":
-                import subprocess
-                old_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+                import subprocess  # noqa: F401
                 import ctypes
                 try:
                     ctypes.windll.kernel32.SetConsoleWindowInfo  # noqa
@@ -212,7 +210,8 @@ class AuthService:
                 "extract_flat":       True,
                 "ignoreerrors":       True,
                 "noprogress":         True,
-                "nocheckcertificate": True,
+                # nocheckcertificate kaldırıldı — cookie extraction her zaman
+                # doğrudan youtube.com'a bağlanır ve geçerli sertifikaya sahiptir.
             }
             with yt_dlp.YoutubeDL(opts) as ydl:
                 ydl.extract_info(

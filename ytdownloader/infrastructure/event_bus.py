@@ -3,25 +3,22 @@
 EventBus — thread-safe pub/sub mesajlaşma sistemi.
 
 Modüller birbirini doğrudan import etmek yerine event yayar/dinler.
-Bu sayede:
-  - Worker thread → UI thread iletişimi güvenli olur (root.after ile)
-  - Modüller birbirinden bağımsız kalır (loose coupling)
+Bu sayede modüller birbirinden bağımsız kalır (loose coupling).
+
+UI thread güvenliği:
+    Callback'ler publish() çağrıldığında senkron çalışır. Worker thread'den
+    UI'ya köprü kurulması UI katmanının sorumluluğundadır (PyQt6 sinyal mekanizması).
 
 Kullanım:
     bus = EventBus()
-
-    # Dinle (genellikle UI thread'de)
     bus.subscribe("download:progress", on_progress)
-    bus.subscribe("download:completed", on_done, executor=root)  # tk.after ile çağırır
-
-    # Yayınla (herhangi bir thread'den)
     bus.publish("download:progress", {"id": "abc", "pct": 45.2})
 """
 
 import threading
 import logging
-from typing import Callable, Any
-from dataclasses import dataclass, field
+from typing import Callable
+from dataclasses import dataclass
 
 log = logging.getLogger("ytdownloader.event_bus")
 
@@ -29,7 +26,6 @@ log = logging.getLogger("ytdownloader.event_bus")
 @dataclass
 class _Subscription:
     callback: Callable
-    executor: Any = None    # tkinter root veya None
 
 
 class EventBus:
@@ -41,21 +37,20 @@ class EventBus:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def subscribe(self, event: str, callback: Callable, executor=None) -> None:
+    def subscribe(self, event: str, callback: Callable) -> None:
         """
         Bir olayı dinlemeye başlar.
 
         Args:
             event:    Olay adı, örn. "download:progress"
-            callback: Olay gerçekleşince çağrılacak fonksiyon
-            executor: tkinter root nesnesi verilirse callback root.after()
-                      ile UI thread'inde çalıştırılır. None ise mevcut
-                      thread'de senkron çalışır.
+            callback: Olay gerçekleşince çağrılacak fonksiyon.
+                      UI güncellemesi gerekiyorsa callback içinde PyQt6
+                      sinyal mekanizması (pyqtSignal.emit) kullanılmalıdır.
         """
         with self._lock:
             if event not in self._subscribers:
                 self._subscribers[event] = []
-            self._subscribers[event].append(_Subscription(callback, executor))
+            self._subscribers[event].append(_Subscription(callback))
             log.debug(f"Abonelik: '{event}' ← {callback.__qualname__}")
 
     def unsubscribe(self, event: str, callback: Callable) -> None:
@@ -64,7 +59,7 @@ class EventBus:
             subs = self._subscribers.get(event, [])
             self._subscribers[event] = [s for s in subs if s.callback is not callback]
 
-    def publish(self, event: str, data: Any = None) -> None:
+    def publish(self, event: str, data=None) -> None:
         """
         Olayı yayınlar. Tüm subscriber'lar bildirilir.
         Lock dışında çağrılır — callback içinde publish yapılsa bile deadlock olmaz.
@@ -95,12 +90,8 @@ class EventBus:
     # ── Internal ──────────────────────────────────────────────────────────────
 
     @staticmethod
-    def _dispatch(sub: _Subscription, event: str, data: Any) -> None:
-        if sub.executor is not None:
-            # tkinter root.after(0, ...) ile UI thread'ine gönder
-            sub.executor.after(0, lambda: sub.callback(data))
-        else:
-            sub.callback(data)
+    def _dispatch(sub: _Subscription, event: str, data) -> None:
+        sub.callback(data)
 
 
 
