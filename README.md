@@ -1,106 +1,76 @@
-# YouTube İndirici
+# YouTube Downloader
 
-Türkçe arayüzlü, YouTube videolarını MP4 ve MP3 olarak indirebilen Windows masaüstü uygulaması.
-
----
-
-## Özellikler
-
-- YouTube URL'den video (MP4) ve ses (MP3) indirme
-- Aynı anda 8 paralel indirme desteği
-- MP3 ID3 tag ve kapak resmi (thumbnail) gömme
-- Koyu / Açık tema
-- Windows toast bildirimleri
-- FFmpeg otomatik kurulumu (internet bağlantısı ile)
-- Drag & drop ile indirme sırası yönetimi
-- İndirme hızı grafiği ve hız limiti
-- Playlist desteği (seçili videolar)
-- İndirme geçmişi
-- Sistem tepsisi (tray) entegrasyonu
+A Windows desktop application for downloading YouTube videos as MP4 and MP3, featuring a clean Turkish-language interface.
 
 ---
 
-## Kurulum (Son Kullanıcı)
+## Features
 
-1. ZIP dosyasını istediğiniz bir klasöre çıkartın
-2. `YouTube Indirici.exe` dosyasını çalıştırın
-3. İlk açılışta FFmpeg otomatik olarak indirilip kurulur
-4. Hazır — Python veya başka bir kurulum gerekmez
+- Download video (MP4) and audio (MP3) from YouTube URLs
+- Up to 8 simultaneous parallel downloads
+- MP3 ID3 tag and cover art (thumbnail) embedding
+- Dark / Light theme
+- Windows toast notifications
+- Automatic FFmpeg installation (requires internet connection)
+- Drag & drop queue reordering
+- Download speed graph and speed limiter
+- Playlist support (select individual videos)
+- Download history
+- System tray integration
 
 ---
 
-## Geliştirici Kurulumu
+## Installation (End User)
 
-**Gereksinimler:**
+1. Run `YouTube İndirici Setup.exe`
+2. FFmpeg will be downloaded and installed automatically on first launch
+3. That's it — no Python or additional dependencies required
+
+---
+
+## Developer Setup
+
+**Requirements:**
 - Python 3.11 – 3.13
 - PyQt6, yt-dlp, mutagen, requests, certifi
 
-**Kurulum:**
+**Install dependencies:**
 ```bash
 pip install pyqt6 yt-dlp mutagen requests certifi
 ```
 
-**Çalıştırma:**
+**Run:**
 ```bash
 python main.py
 ```
 
 ---
 
-## Teknik Yığın
+## Tech Stack
 
-| Katman | Teknoloji |
+| Layer | Technology |
 |---|---|
-| Arayüz | PyQt6 |
-| İndirme | yt-dlp |
-| Ses işleme | FFmpeg, mutagen |
-| Paketleme | PyInstaller |
-| Platform | Windows 10/11 |
+| UI | PyQt6 |
+| Downloading | yt-dlp |
+| Audio processing | FFmpeg, mutagen |
+| Packaging | PyInstaller |
+| Platform | Windows 10 / 11 |
 
 ---
 
-## Proje Yapısı
+## Project Structure
 
 ```
 ytdownloader/
-├── core/          # İndirme motoru ve thread yönetimi
-├── infrastructure/# Ayarlar, log, event bus
-├── models/        # Veri modelleri
-├── services/      # Bildirim, güncelleme, ses servisleri
-├── ui/qt/         # Tüm arayüz bileşenleri
-└── assets/        # İkonlar ve FFmpeg
+├── core/           # Download engine and thread management
+├── infrastructure/ # Settings, logging, event bus
+├── models/         # Data models
+├── services/       # Notification, update, audio services
+├── ui/qt/          # All UI components
+└── assets/         # Icons and FFmpeg
 ```
 
 ---
-
-## Lisans
-
-Bu yazılım özel mülkiyete aittir. İzinsiz dağıtım ve kullanım yasaktır.
-
----
-
-# YouTube Downloader
-
-A Turkish-interface Windows desktop application for downloading YouTube videos as MP4 or MP3.
-
-## Features
-
-- Download videos (MP4) and audio (MP3) from YouTube URLs
-- Up to 8 simultaneous parallel downloads
-- MP3 ID3 tag and thumbnail embedding
-- Dark / Light theme
-- Windows toast notifications
-- Automatic FFmpeg installation
-- Drag & drop queue management
-- Download speed graph and speed limiter
-- Playlist support
-- Download history
-- System tray integration
-
-## Requirements
-
-- Windows 10 / 11
-- No Python required (standalone EXE)
 
 ## License
 
