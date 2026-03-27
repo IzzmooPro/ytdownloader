@@ -94,6 +94,11 @@ class MainWindow(QMainWindow):
         )
         self.setWindowTitle(f"YouTube İndirici v1.0.0")
 
+        # Açılışta otomatik güncelleme kontrolü — 3 saniye sonra, arka planda.
+        # show_no_update=False: yeni sürüm yoksa sessiz kalır.
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(3000, lambda: self._update_service.check(self, show_no_update=False))
+
     def _setup_tray(self):
         """Sistem tepsisi ikonunu kur."""
         from PyQt6.QtWidgets import QSystemTrayIcon
