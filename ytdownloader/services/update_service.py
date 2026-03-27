@@ -4,6 +4,7 @@
 import threading
 import webbrowser
 import urllib.request
+import urllib.error
 import json
 
 from PyQt6.QtCore import QObject, pyqtSignal
@@ -92,6 +93,19 @@ class UpdateService(QObject):
                     parent,
                     f"En son sürümü kullanıyorsunuz: v{self.CURRENT_VERSION}",
                 )
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                # Henüz hiç release yayınlanmamış — sessizce geç.
+                log.debug("Güncelleme kontrolü: henüz release yok (404)")
+                if show_no_update:
+                    self._sig_show_info.emit(
+                        parent,
+                        f"En son sürümü kullanıyorsunuz: v{self.CURRENT_VERSION}",
+                    )
+            else:
+                log.warning(f"Güncelleme kontrolü başarısız: {e}")
+                if show_no_update:
+                    self._sig_show_info.emit(parent, f"Güncelleme kontrolü yapılamadı:\n{e}")
         except Exception as e:
             log.warning(f"Güncelleme kontrolü başarısız: {e}")
             if show_no_update:
