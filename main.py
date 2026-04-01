@@ -17,10 +17,15 @@ _base = _root / "ytdownloader"
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
-# WebEngine GPU donmalarını azalt
+# WebEngine performans ayarları
+# KALDIRILDI: --enable-gpu-rasterization + --in-process-gpu
+#   Sebep: SharedImageManager::ProduceSkia hataları bu ikiliden kaynaklanıyor.
+#   --in-process-gpu, GPU'yu browser process içinde çalıştırır; paylaşımlı bellek
+#   yönetimi (SharedImageManager) in-process modda farklı davranır ve ilk video
+#   frame texture upload'unda ProduceSkia başarısız olabilir → software fallback
+#   → ilk video açılış gecikmesi. GPU'yu ayrı process'te bırakmak (varsayılan)
+#   bu hatayı ortadan kaldırır.
 os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS",
-    "--disable-gpu-compositing "
-    "--disable-software-rasterizer "
     "--disable-background-timer-throttling "
     "--disable-renderer-backgrounding "
     "--no-sandbox"
@@ -79,7 +84,7 @@ def main():
     if sys.platform == "win32":
         try:
             import ctypes
-            APP_ID = "YTDownloader.YouTubeIndirici.1.0"
+            APP_ID = "YTDownloader.YouTubeIndirici.1.1"
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
         except Exception:
             pass
@@ -166,12 +171,25 @@ def main():
         download_manager.refresh_ffmpeg()
 
     exit_code = app.exec()
+
     # Toast service'i temizle
     try:
         from ytdownloader.services.toast_service import shutdown as toast_shutdown
         toast_shutdown()
     except Exception:
         pass
+
+    # WebEngine verilerini diske yaz — kapanmadan önce Chromium'a flush fırsatı ver.
+    # Sıra önemli: önce window (view zinciri), sonra profil Python referansı serbest bırakılır.
+    # Bu sayede Qt C++ destructor zinciri app event loop'u hâlâ aktifken tetiklenir.
+    try:
+        del window                                          # MainWindow → YouTubeTab → QWebEngineView → QWebEnginePage zinciri
+        import ytdownloader.ui.qt.youtube_tab as _yt_mod
+        _yt_mod._YT_PROFILE = None                          # Profil C++ destructor → Chromium cookie/storage flush
+        app.processEvents()                                 # Bekleyen Qt event'lerini tüket
+    except Exception:
+        pass
+
     sys.exit(exit_code)
 
 

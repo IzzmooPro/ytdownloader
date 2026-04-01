@@ -81,10 +81,11 @@ class AccentBar(QFrame):
 # ── Ana Kart ──────────────────────────────────────────────────────────────────
 class VideoCard(QFrame):
     # Sinyaller
-    remove_requested   = pyqtSignal(str)          # download_id
-    _progress_signal   = pyqtSignal(dict)          # thread-safe progress
-    _completed_signal  = pyqtSignal(bool, object)  # thread-safe completed
-    _info_signal       = pyqtSignal(bool, dict, str)  # thread-safe info
+    remove_requested        = pyqtSignal(str)          # download_id
+    playlist_open_requested = pyqtSignal(str)          # url — kart içinden kullanıcı istedi
+    _progress_signal        = pyqtSignal(dict)          # thread-safe progress
+    _completed_signal       = pyqtSignal(bool, object)  # thread-safe completed
+    _info_signal            = pyqtSignal(bool, dict, str)  # thread-safe info
 
     # Durum → accent rengi
     STATE_COLORS = {
@@ -117,6 +118,20 @@ class VideoCard(QFrame):
         self.settings_manager = settings_manager
         self.settings = settings_manager.load()
 
+        # Faz 1: URL'deki list= parametresinden playlist türünü belirle.
+        # "playlist"  — kullanıcı/kanal listesi (PL*, UU*)
+        # "mix"       — YouTube otomatik üretimi (RD*, RL*, TL*, LL*, FL*, WL)
+        # None        — liste yok
+        import urllib.parse as _up
+        _list_id = (_up.parse_qs(_up.urlparse(url).query).get("list") or [""])[0]
+        _MIX_PREFIXES = ("RD", "RL", "TL", "LL", "FL", "WL")
+        if not _list_id:
+            self._playlist_type = None
+        elif _list_id.startswith(_MIX_PREFIXES):
+            self._playlist_type = "mix"
+        else:
+            self._playlist_type = "playlist"
+
         self.download_id   = str(uuid.uuid4())
         self.download_state = "idle"
         self.download_folder = ""
@@ -126,6 +141,7 @@ class VideoCard(QFrame):
         self.resolution_list = []
         self.format_options  = {}
         self._thumb_loader  = None
+        self._fetch_in_progress = False  # re-entrant fetch koruması
 
         self._build_ui()
         self._load_thumbnail()
@@ -141,7 +157,7 @@ class VideoCard(QFrame):
     def _build_ui(self):
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.setMaximumHeight(170)
+        self.setMaximumHeight(200)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_context_menu)
 
@@ -158,8 +174,8 @@ class VideoCard(QFrame):
             lambda pos: self._show_context_menu(content.mapTo(self, pos))
         )
         content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(10, 8, 10, 8)
-        content_layout.setSpacing(4)
+        content_layout.setContentsMargins(12, 10, 12, 10)
+        content_layout.setSpacing(6)
 
         # ── Başlık satırı ──────────────────────────────────────────────
         header = QHBoxLayout()
@@ -197,7 +213,7 @@ class VideoCard(QFrame):
 
         # Bilgi sütunu
         info_col = QVBoxLayout()
-        info_col.setSpacing(2)
+        info_col.setSpacing(3)
         info_col.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         self.lbl_channel = QLabel("")
@@ -229,6 +245,7 @@ class VideoCard(QFrame):
         fmt_row.addStretch()
 
         info_col.addLayout(fmt_row)
+
         middle.addLayout(info_col, stretch=1)
 
         # Kontrol sütunu (sağ) — sabit genişlik ve yükseklik
@@ -236,7 +253,7 @@ class VideoCard(QFrame):
         ctrl_widget.setFixedWidth(240)
         ctrl_widget.setFixedHeight(94)
         ctrl_col = QVBoxLayout(ctrl_widget)
-        ctrl_col.setSpacing(2)
+        ctrl_col.setSpacing(4)
         ctrl_col.setContentsMargins(0, 0, 0, 0)
         ctrl_col.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
 
@@ -248,7 +265,7 @@ class VideoCard(QFrame):
         # Progress bar — kalın ve belirgin
         self.progress_bar = QProgressBar()
         self.progress_bar.setFixedWidth(220)
-        self.progress_bar.setFixedHeight(10)
+        self.progress_bar.setFixedHeight(8)
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setTextVisible(False)
@@ -271,6 +288,15 @@ class VideoCard(QFrame):
         pct_row.addWidget(self.lbl_badge)
         ctrl_col.addLayout(pct_row)
 
+        # Hata satırı — sadece error state'inde görünür
+        self.lbl_error = QLabel("")
+        self.lbl_error.setObjectName("card_meta")
+        self.lbl_error.setWordWrap(True)
+        self.lbl_error.setFixedWidth(220)
+        self.lbl_error.setStyleSheet("color: #e05a5a; font-size: 11px;")
+        self.lbl_error.setVisible(False)
+        ctrl_col.addWidget(self.lbl_error, alignment=Qt.AlignmentFlag.AlignRight)
+
         # Butonları aşağıya it
         ctrl_col.addStretch(1)
 
@@ -285,31 +311,23 @@ class VideoCard(QFrame):
         self.btn_folder = QPushButton()
         self.btn_folder.setObjectName("btn_icon")
         self.btn_folder.setFixedSize(38, 38)
-        self.btn_folder.setToolTip("İndirme Konumu")
+        self.btn_folder.setToolTip("Kayıt klasörünü seç")
         self.btn_folder.clicked.connect(self._choose_folder)
         set_icon(self.btn_folder, "folder", "#9da3b4", 17)
-        self.btn_folder.setStyleSheet(
-            "QPushButton { background-color: #e8ecf4; border: 1.5px solid #b8bfc8; border-radius: 8px; }"
-            "QPushButton:hover { background-color: #dce2ef; border-color: #c0392b; }"
-        )
         btn_row.addWidget(self.btn_folder)
 
         self.btn_action = QPushButton()
         self.btn_action.setObjectName("btn_action")
         self.btn_action.setFixedSize(38, 38)
-        self.btn_action.setToolTip("İndir")
+        self.btn_action.setToolTip("İndirmeyi başlat")
         self.btn_action.clicked.connect(self._on_action)
-        self.btn_action.setStyleSheet(
-            "QPushButton { background-color: #c0392b; border: none; border-radius: 8px; }"
-            "QPushButton:hover { background-color: #a93226; }"
-        )
         set_icon(self.btn_action, "download", "#ffffff", 17)
         btn_row.addWidget(self.btn_action)
 
         self.btn_open_file = QPushButton()
         self.btn_open_file.setObjectName("btn_icon")
         self.btn_open_file.setFixedSize(38, 38)
-        self.btn_open_file.setToolTip("Dosyayı Klasörde Göster")
+        self.btn_open_file.setToolTip("Klasörde göster")
         self.btn_open_file.clicked.connect(self._open_file)
         set_icon(self.btn_open_file, "folder", "#28a745", 17)
         self.btn_open_file.setVisible(False)
@@ -318,7 +336,7 @@ class VideoCard(QFrame):
         self.btn_copy_path = QPushButton()
         self.btn_copy_path.setObjectName("btn_icon")
         self.btn_copy_path.setFixedSize(38, 38)
-        self.btn_copy_path.setToolTip("Dosya Yolunu Kopyala")
+        self.btn_copy_path.setToolTip("Dosya yolunu kopyala")
         self.btn_copy_path.clicked.connect(self._copy_path)
         set_icon(self.btn_copy_path, "paste", "#9da3b4", 17)
         self.btn_copy_path.setVisible(False)
@@ -331,9 +349,100 @@ class VideoCard(QFrame):
 
         middle.addWidget(ctrl_widget)
         content_layout.addLayout(middle)
+
+        # ── Playlist banner — URL veya metadata ile tetiklenir, başta gizli ───
+        self._playlist_banner = QFrame()
+        self._playlist_banner.setObjectName("playlist_banner")
+        self._playlist_banner.setVisible(False)
+        from ytdownloader.ui.qt.theme import theme_manager as _tm
+        _border = _tm.palette.border
+        self._playlist_banner.setStyleSheet(
+            f"QFrame#playlist_banner {{ border-top: 1px solid {_border}; background: transparent; }}"
+        )
+        banner_lay = QHBoxLayout(self._playlist_banner)
+        banner_lay.setContentsMargins(2, 4, 2, 0)
+        banner_lay.setSpacing(8)
+
+        self._lbl_playlist_info = QLabel("Bu video bir oynatma listesine ait")
+        self._lbl_playlist_info.setStyleSheet("color: #6b7280; font-size: 11px;")
+
+        self._btn_open_playlist = QPushButton("Playlist olarak aç")
+        self._btn_open_playlist.setFixedHeight(22)
+        self._btn_open_playlist.setStyleSheet("""
+            QPushButton {
+                background: transparent; border: 1px solid #3d4460;
+                border-radius: 5px; color: #6b7280;
+                font-size: 11px; padding: 0 8px;
+            }
+            QPushButton:hover { border-color: #c0392b; color: #c0392b; }
+        """)
+        self._btn_open_playlist.clicked.connect(
+            lambda: self.playlist_open_requested.emit(self.url)
+        )
+
+        banner_lay.addWidget(self._lbl_playlist_info)
+        banner_lay.addStretch()
+        banner_lay.addWidget(self._btn_open_playlist)
+        content_layout.addWidget(self._playlist_banner)
+
+        # Faz 1: tür biliniyorsa baştan göster — metadata bekleme
+        if self._playlist_type:
+            self._show_playlist_banner("", self._playlist_type)
+
         root_layout.addWidget(content, stretch=1)
 
     # ── Thumbnail ─────────────────────────────────────────────────────────────
+
+    def _show_playlist_banner(self, playlist_title: str = "", kind: str = "playlist"):
+        """
+        Playlist/Mix banner'ını türüne göre gösterir.
+
+        kind="playlist"  → kullanıcı listesi: belirgin ton, kırmızı hover
+        kind="mix"       → YouTube otomatik mix: pasif ton, gri hover
+        """
+        is_mix = (kind == "mix")
+
+        if is_mix:
+            info_text = (
+                f"YouTube Mix'ine ait  ·  {playlist_title}"
+                if playlist_title
+                else "Bu bağlantı YouTube'un otomatik oynatma listesini içeriyor"
+            )
+            btn_text  = "Mix'i Aç"
+            # Pasif — gri ton, hover kırmızıya gitmiyor
+            info_css  = "color: #4e5568; font-size: 11px;"
+            btn_css   = """
+                QPushButton {
+                    background: transparent; border: 1px solid #2e3348;
+                    border-radius: 5px; color: #4e5568;
+                    font-size: 11px; padding: 0 8px;
+                }
+                QPushButton:hover { border-color: #5a6080; color: #6b7280; }
+            """
+        else:
+            info_text = (
+                f"Oynatma listesine ait  ·  {playlist_title}"
+                if playlist_title
+                else "Bu video bir oynatma listesine ait"
+            )
+            btn_text  = "Playlist olarak aç"
+            # Normal — mevcut stil
+            info_css  = "color: #6b7280; font-size: 11px;"
+            btn_css   = """
+                QPushButton {
+                    background: transparent; border: 1px solid #3d4460;
+                    border-radius: 5px; color: #6b7280;
+                    font-size: 11px; padding: 0 8px;
+                }
+                QPushButton:hover { border-color: #c0392b; color: #c0392b; }
+            """
+
+        self._lbl_playlist_info.setText(info_text)
+        self._lbl_playlist_info.setStyleSheet(info_css)
+        self._btn_open_playlist.setText(btn_text)
+        self._btn_open_playlist.setStyleSheet(btn_css)
+        self._playlist_banner.setVisible(True)
+        self.setMaximumHeight(230)
 
     def _apply_btn_styles(self):
         """Buton stillerini temaya göre uygula — her iki temada görünür."""
@@ -363,7 +472,7 @@ class VideoCard(QFrame):
             QComboBox {{
                 background-color: transparent;
                 border: 1px solid {brd};
-                border-radius: 6px;
+                border-radius: 7px;
                 padding: 0px 8px;
                 font-size: 12px;
                 color: {txt};
@@ -454,16 +563,39 @@ class VideoCard(QFrame):
     # ── Video Bilgisi ─────────────────────────────────────────────────────────
 
     def _fetch_info(self):
-        # Callback worker thread'den gelir — sinyal üzerinden ana thread'e aktar
+        if self._fetch_in_progress:
+            return
+        self._fetch_in_progress = True
         self.download_manager.fetch_video_info(self.url, self._on_info_received_thread)
+
+    def _retry_fetch(self):
+        """Metadata fetch'i yeniden başlat."""
+        self.lbl_title.setText("Yeniden yükleniyor...")
+        self.lbl_channel.setText("")
+        self.lbl_channel.setTextFormat(Qt.TextFormat.AutoText)
+        self.lbl_channel.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+        try:
+            self.lbl_channel.linkActivated.disconnect()
+        except Exception:
+            pass
+        self._fetch_info()
 
     def _on_info_received_thread(self, success: bool, data):
         """Worker thread'den gelir — sinyal ile ana thread'e ilet."""
+        self._fetch_in_progress = False
         self._info_signal.emit(success, data if success else {}, "" if success else str(data))
 
     def _on_info_received(self, success: bool, data: dict, err: str):
         if not success:
-            self.lbl_title.setText("Video bilgisi alınamadı")
+            self.lbl_title.setText("Video bilgisi yüklenemedi")
+            self.lbl_channel.setText(
+                '<a href="#retry" style="color:#c0392b;text-decoration:none;">↺ Yeniden dene</a>'
+            )
+            self.lbl_channel.setTextFormat(Qt.TextFormat.RichText)
+            self.lbl_channel.setTextInteractionFlags(
+                Qt.TextInteractionFlag.TextBrowserInteraction
+            )
+            self.lbl_channel.linkActivated.connect(lambda _: self._retry_fetch())
             return
 
         info = data
@@ -492,6 +624,16 @@ class VideoCard(QFrame):
 
         # Çözünürlük listesi
         self._parse_formats(info.get("formats", []))
+
+        # Faz 2: metadata'dan playlist türü doğrulaması
+        playlist_title = info.get("playlist_title") or info.get("playlist", "")
+        playlist_id    = info.get("playlist_id") or ""
+        if playlist_title or playlist_id:
+            _MIX_PREFIXES = ("RD", "RL", "TL", "LL", "FL", "WL")
+            meta_kind = (
+                "mix" if playlist_id.startswith(_MIX_PREFIXES) else "playlist"
+            )
+            self._show_playlist_banner(playlist_title, meta_kind)
 
         # Playlist'ten gelen preset format/quality varsa uygula, yoksa ayarlardan al
         settings = self.settings_manager.load()
@@ -642,6 +784,7 @@ class VideoCard(QFrame):
         self.progress_bar.setValue(0)
         self.lbl_pct.setText("")
         self.lbl_speed.setText("")
+        self.lbl_error.setVisible(False)
         self._set_state("idle")
 
     def mouseDoubleClickEvent(self, event):
@@ -859,6 +1002,7 @@ class VideoCard(QFrame):
             self.progress_bar.setValue(100)
             self.lbl_pct.setText("%100")
             self.lbl_speed.setText("")
+            self.lbl_error.setVisible(False)
             self.speed_graph.freeze(color="#28a745")
             if isinstance(result, dict):
                 self._final_file = result.get("file_path", "")
@@ -877,8 +1021,13 @@ class VideoCard(QFrame):
                             subprocess.Popen(["xdg-open", str(Path(fp).parent)])
         else:
             self._set_state("error")
-            err = str(result)[:80]
-            self.lbl_speed.setText(err)
+            full_err = str(result)
+            # Kısa özet lbl_speed'de, tam mesaj tooltip'te
+            short_err = full_err[:120]
+            self.lbl_speed.setText("")
+            self.lbl_error.setText(short_err)
+            self.lbl_error.setToolTip(full_err)
+            self.lbl_error.setVisible(True)
             self.notification_center.show(
                 "❌ İndirme Hatası",
                 self.full_title,

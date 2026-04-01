@@ -9,7 +9,7 @@ from datetime import datetime
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
-    QLineEdit, QComboBox, QMessageBox, QAbstractItemView,
+    QLineEdit, QComboBox, QMessageBox, QAbstractItemView, QMenu, QApplication,
 )
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QColor, QFont, QIcon
@@ -19,9 +19,10 @@ from ytdownloader.services.i18n_service import get_i18n
 
 class HistoryDialog(QDialog):
 
-    def __init__(self, parent, settings_manager):
+    def __init__(self, parent, settings_manager, re_download_cb=None):
         super().__init__(parent)
         self.settings_manager = settings_manager
+        self._re_download_cb = re_download_cb
         self._i18n = get_i18n()
         self._all_entries: list[dict] = []
 
@@ -34,7 +35,7 @@ class HistoryDialog(QDialog):
     def _build_ui(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 16)
-        root.setSpacing(10)
+        root.setSpacing(12)
 
         # ── Üst bar: arama + filtre ──────────────────────────────────────
         top = QHBoxLayout()
@@ -48,7 +49,7 @@ class HistoryDialog(QDialog):
                 border-radius: 7px; padding: 0 12px;
                 color: #e8eaf0; font-size: 13px;
             }
-            QLineEdit:focus { border-color: #4a9eff; }
+            QLineEdit:focus { border-color: #c0392b; }
         """)
         self.search_box.textChanged.connect(self._apply_filter)
         top.addWidget(self.search_box, stretch=1)
@@ -93,9 +94,9 @@ class HistoryDialog(QDialog):
             QTableWidget {
                 background: #12141f; border: 1px solid #2e3348;
                 border-radius: 8px; gridline-color: transparent;
-                selection-background-color: #1e2d4a;
+                selection-background-color: #272c40;
             }
-            QTableWidget::item { padding: 6px 10px; color: #e8eaf0; }
+            QTableWidget::item { padding: 8px 10px; color: #e8eaf0; }
             QTableWidget::item:alternate { background: #161926; }
             QHeaderView::section {
                 background: #1a1d27; color: #6b7280;
@@ -105,6 +106,8 @@ class HistoryDialog(QDialog):
             }
         """)
         self.table.doubleClicked.connect(self._open_file_row)
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self._show_row_menu)
         root.addWidget(self.table)
 
         # ── Alt bar: sayaç + aç butonu ───────────────────────────────────
@@ -115,15 +118,9 @@ class HistoryDialog(QDialog):
         bot.addWidget(self.lbl_count)
         bot.addStretch()
 
-        btn_open = QPushButton("Seçili Dosyayı Aç")
+        btn_open = QPushButton("Dosyayı Göster")
         btn_open.setFixedHeight(34)
-        btn_open.setStyleSheet("""
-            QPushButton {
-                background: #2e3348; border: none; border-radius: 7px;
-                color: #e8eaf0; font-size: 12px; padding: 0 14px;
-            }
-            QPushButton:hover { background: #3d4460; }
-        """)
+        btn_open.setToolTip("Seçili dosyayı klasörde göster")
         btn_open.clicked.connect(self._open_selected)
         bot.addWidget(btn_open)
 
@@ -180,24 +177,29 @@ class HistoryDialog(QDialog):
                 QTableWidgetItem(dt),
             ]
 
+            url = e.get("url", "")
             for col, item in enumerate(items):
                 item.setData(Qt.ItemDataRole.UserRole, fpath)
+                item.setData(Qt.ItemDataRole.UserRole + 1, url)
                 if col == 2:  # format badge rengi
                     color = "#4a9eff" if fmt == "MP4" else "#28a745"
                     item.setForeground(QColor(color))
                     f = item.font(); f.setBold(True); item.setFont(f)
                 self.table.setItem(row, col, item)
 
-        self.table.setRowHeight(0, 38)
         for row in range(self.table.rowCount()):
-            self.table.setRowHeight(row, 38)
+            self.table.setRowHeight(row, 40)
 
         total = len(self._all_entries)
         shown = len(entries)
-        self.lbl_count.setText(
-            f"{shown} kayıt gösteriliyor" if shown == total
-            else f"{shown} / {total} kayıt"
-        )
+        if total == 0:
+            self.lbl_count.setText("Henüz indirme kaydı yok")
+        elif shown == 0:
+            self.lbl_count.setText("Arama sonucu bulunamadı")
+        elif shown == total:
+            self.lbl_count.setText(f"{shown} indirme")
+        else:
+            self.lbl_count.setText(f"{shown} / {total} sonuç")
 
     def _open_file_row(self, index):
         item = self.table.item(index.row(), 0)
@@ -227,6 +229,43 @@ class HistoryDialog(QDialog):
             subprocess.run(["open", "-R", path])
         else:
             subprocess.run(["xdg-open", os.path.dirname(path)])
+
+    def _show_row_menu(self, pos):
+        """Sağ tık menüsü — seçili satır üzerinde işlem seçenekleri."""
+        index = self.table.indexAt(pos)
+        if not index.isValid():
+            return
+        row = index.row()
+        item = self.table.item(row, 0)
+        if not item:
+            return
+        fpath = item.data(Qt.ItemDataRole.UserRole)
+        url   = item.data(Qt.ItemDataRole.UserRole + 1) or ""
+
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu { background: #1a1d27; border: 1px solid #2e3348;
+                    border-radius: 10px; padding: 5px 4px; font-size: 13px; }
+            QMenu::item { padding: 7px 18px 7px 12px; color: #e8eaf0; border-radius: 5px; margin: 1px 4px; }
+            QMenu::item:selected { background: #2e3348; }
+        """)
+
+        if fpath and os.path.exists(fpath):
+            a = menu.addAction("Klasörde Göster")
+            a.triggered.connect(lambda: self._open_path(fpath))
+        if url and self._re_download_cb:
+            a = menu.addAction("Yeniden İndir")
+            a.triggered.connect(lambda: (self.accept(), self._re_download_cb(url)))
+        if url:
+            a = menu.addAction("URL'yi Kopyala")
+            a.triggered.connect(lambda: QApplication.clipboard().setText(url))
+        title_text = item.text()
+        if title_text:
+            a = menu.addAction("Başlığı Kopyala")
+            a.triggered.connect(lambda: QApplication.clipboard().setText(title_text))
+
+        if not menu.isEmpty():
+            menu.exec(self.table.viewport().mapToGlobal(pos))
 
     def _clear_history(self):
         reply = QMessageBox.question(

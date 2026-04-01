@@ -48,6 +48,11 @@ class DownloadManager:
         # korur. Sadece dict erişimlerini kapsar; uzun işlemler lock dışında kalır.
         self._downloads_lock   = threading.Lock()
 
+        # Aynı URL için eşzamanlı birden fazla fetch başlatmayı engeller.
+        # url → [callback, ...] — fetch tamamlanınca hepsine sonuç iletilir.
+        self._pending_fetches: dict = {}
+        self._fetch_lock       = threading.Lock()
+
         self._common_ydl_opts = {
             "quiet":             True,
             "no_warnings":       True,
@@ -64,16 +69,16 @@ class DownloadManager:
         import sys as _sys
         ffmpeg_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
         appdata = os.environ.get("APPDATA") or os.path.expanduser("~")
-        candidates = []
-        # PyInstaller EXE
-        if hasattr(_sys, "_MEIPASS"):
-            candidates.append(Path(_sys._MEIPASS) / "ytdownloader" / "assets" / "ffmpeg")
-        candidates += [
+        candidates = [
+            # Kullanıcının bir kez indirdiği kalıcı FFmpeg her zaman önce gelir.
             Path(appdata) / "MyYouTubeDownloader" / "ffmpeg",
             self.base_path / "bin",
             self.base_path / "ytdownloader" / "assets" / "ffmpeg",
             self.base_path / "assets" / "ffmpeg",
         ]
+        # PyInstaller içine gömülü kopya varsa son çare olarak kullan.
+        if hasattr(_sys, "_MEIPASS"):
+            candidates.append(Path(_sys._MEIPASS) / "ytdownloader" / "assets" / "ffmpeg")
         for ffmpeg_dir in candidates:
             if (ffmpeg_dir / ffmpeg_name).exists():
                 self._common_ydl_opts["ffmpeg_location"] = str(ffmpeg_dir)
@@ -88,7 +93,18 @@ class DownloadManager:
     # ── Public API ──────────────────────────────────────────────────────────
 
     def fetch_video_info(self, url: str, callback) -> None:
-        """Video meta bilgisini arka planda çeker."""
+        """Video meta bilgisini arka planda çeker.
+
+        Aynı URL için eşzamanlı birden fazla fetch başlatmaz.
+        İkinci çağrı ilk fetch tamamlanınca aynı sonucu alır (fan-out pattern).
+        """
+        with self._fetch_lock:
+            if url in self._pending_fetches:
+                self._pending_fetches[url].append(callback)
+                log.debug(f"Fetch zaten sürüyor, abone eklendi: {url[:60]}")
+                return
+            self._pending_fetches[url] = [callback]
+
         def _fetch():
             try:
                 log.info(f"Video bilgisi alınıyor: {url}")
@@ -108,10 +124,18 @@ class DownloadManager:
                 if "entries" in info:
                     info = info["entries"][0]
                 log.info(f"Video bilgisi alındı: {info.get('title', '?')}")
-                callback(True, info)
+                success, data = True, info
             except Exception as e:
                 log.error(f"Video bilgisi alınamadı: {e}")
-                callback(False, str(e))
+                success, data = False, str(e)
+
+            with self._fetch_lock:
+                callbacks = self._pending_fetches.pop(url, [])
+            for cb in callbacks:
+                try:
+                    cb(success, data)
+                except Exception as cb_err:
+                    log.warning(f"Fetch callback hatası: {cb_err}")
 
         threading.Thread(target=_fetch, daemon=True).start()
 
@@ -312,5 +336,4 @@ class DownloadManager:
     def cancel_download(self, download_id: str) -> bool:
         log.info(f"[{download_id}] Cancel isteği")
         return bool(self._engine.cancel(download_id))
-
 

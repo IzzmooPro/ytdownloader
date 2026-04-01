@@ -92,14 +92,9 @@ def is_ffmpeg_available(base_path=None) -> bool:
     from pathlib import Path
     ffmpeg_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
 
-    # PyInstaller EXE içindeyse _MEIPASS klasörüne de bak
-    candidates = []
-    if hasattr(sys, "_MEIPASS"):
-        candidates.append(Path(sys._MEIPASS) / "ytdownloader" / "assets" / "ffmpeg")
-
     # APPDATA altındaki kalıcı kurulum dizini (EXE modunda buraya yüklenir)
     appdata = os.environ.get("APPDATA") or os.path.expanduser("~")
-    candidates.append(Path(appdata) / "MyYouTubeDownloader" / "ffmpeg")
+    candidates = [Path(appdata) / "MyYouTubeDownloader" / "ffmpeg"]
 
     if base_path:
         candidates += [
@@ -107,6 +102,10 @@ def is_ffmpeg_available(base_path=None) -> bool:
             Path(base_path) / "ytdownloader" / "assets" / "ffmpeg",
             Path(base_path) / "assets" / "ffmpeg",
         ]
+
+    # Gömülü PyInstaller kopyası varsa son çare olarak bak.
+    if hasattr(sys, "_MEIPASS"):
+        candidates.append(Path(sys._MEIPASS) / "ytdownloader" / "assets" / "ffmpeg")
 
     for d in candidates:
         if (d / ffmpeg_name).exists():

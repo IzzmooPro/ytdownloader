@@ -6,6 +6,7 @@ from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtPrope
 from PyQt6.QtGui import (QPainter, QColor, QPolygonF, QPixmap, QPen,
                           QLinearGradient, QFont, QFontMetrics)
 from PyQt6.QtCore import QPointF, QRectF
+from ytdownloader.config.constants import APP_VERSION
 
 
 class _AnimatedValue(QObject):
@@ -92,7 +93,7 @@ class SplashScreen(QWidget):
         card_lay.addSpacing(6)
 
         # Versiyon
-        lbl_ver = QLabel("v1.0.0")
+        lbl_ver = QLabel(f"v{APP_VERSION}")
         lbl_ver.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         lbl_ver.setStyleSheet("font-size: 13px; color: #4a9eff; font-weight: 600;")
         card_lay.addWidget(lbl_ver)

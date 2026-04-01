@@ -28,6 +28,7 @@ __pycache__/
 
 # ── Claude Code çalışma dosyaları ─────────────────────────────
 .claude/
+conversation_summary_for_chatgpt.md
 
 # ── Sanal ortam ───────────────────────────────────────────────
 venv/

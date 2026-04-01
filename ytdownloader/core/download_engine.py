@@ -82,15 +82,14 @@ class DownloadEngine:
         import sys as _sys
         ffmpeg_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
         appdata = os.environ.get("APPDATA") or os.path.expanduser("~")
-        candidates = []
-        if hasattr(_sys, "_MEIPASS"):
-            candidates.append(Path(_sys._MEIPASS) / "ytdownloader" / "assets" / "ffmpeg")
-        candidates += [
+        candidates = [
             Path(appdata) / "MyYouTubeDownloader" / "ffmpeg",
             self._base_path / "bin",
             self._base_path / "ytdownloader" / "assets" / "ffmpeg",
             self._base_path / "assets" / "ffmpeg",
         ]
+        if hasattr(_sys, "_MEIPASS"):
+            candidates.append(Path(_sys._MEIPASS) / "ytdownloader" / "assets" / "ffmpeg")
         for d in candidates:
             if (d / ffmpeg_name).exists():
                 return str(d)

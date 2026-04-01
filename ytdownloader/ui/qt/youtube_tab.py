@@ -9,17 +9,93 @@ from pathlib import Path
 import os
 from PyQt6.QtCore import Qt, QUrl, pyqtSignal
 from ytdownloader.ui.qt.icon_helper import set_icon
-from PyQt6.QtGui import QColor
 
 # WebEngine opsiyonel — kurulu değilse fallback göster
 try:
     from PyQt6.QtWebEngineWidgets import QWebEngineView
     from PyQt6.QtWebEngineCore import (
-        QWebEnginePage, QWebEngineSettings, QWebEngineProfile, QWebEngineScript
+        QWebEnginePage, QWebEngineSettings, QWebEngineProfile, QWebEngineScript,
+        QWebEngineUrlRequestInterceptor, QWebEngineUrlRequestInfo,
     )
     WEBENGINE_AVAILABLE = True
 except ImportError:
     WEBENGINE_AVAILABLE = False
+
+
+# ── Reklam engelleyici ────────────────────────────────────────────────────────
+
+_AD_DOMAINS = [
+    "googlesyndication.com",
+    "doubleclick.net",
+    "googleadservices.com",
+    "adservice.google.com",
+    "pagead2.googlesyndication.com",
+    "tpc.googlesyndication.com",
+    "adsense.google.com",
+    "imasdk.googleapis.com",
+]
+
+_AD_URL_PATTERNS = [
+    "/pagead/",
+]
+
+# ── CSS: YouTube reklam elementlerini gizle ──────────────────────────────────
+# DocumentReady'de inject edilir — sürdürülebilir minimum katman.
+_ADBLOCK_CSS_JS = """
+(function() {
+    if (document.getElementById('__ytab_css')) return;
+    var s = document.createElement('style');
+    s.id = '__ytab_css';
+    s.textContent = [
+        /* ── VİDEO REKLAMI: player'ın TÜM içeriğini gizle ──────────────────── */
+        '#movie_player.ad-showing{background:#0f0f0f!important}',
+        '#movie_player.ad-showing>*{visibility:hidden!important}',
+        '#movie_player.ad-interrupting{background:#0f0f0f!important}',
+        '#movie_player.ad-interrupting>*{visibility:hidden!important}',
+        /* ── COMPANION / BANNER ──────────────────────────────────────────────── */
+        'ytd-action-companion-ad-renderer{display:none!important}',
+        'ytd-companion-slot-renderer{display:none!important}',
+        'ytd-banner-promo-renderer{display:none!important}',
+        '.video-ads.ytp-ad-module{display:none!important}',
+        '.ytp-ce-covering-overlay{display:none!important}',
+        '.ytp-ad-progress-list{display:none!important}',
+        /* ── ANASAYFA / FEED REKLAMLARI ─────────────────────────────────────── */
+        '#masthead-ad{display:none!important}',
+        'ytd-ad-slot-renderer{display:none!important}',
+        'ytd-in-feed-ad-layout-renderer{display:none!important}',
+        'ytd-display-ad-renderer{display:none!important}',
+        'ytd-promoted-sparkles-web-renderer{display:none!important}',
+        'ytd-promoted-video-renderer{display:none!important}',
+        'ytd-rich-item-renderer:has(>*>ytd-ad-slot-renderer){display:none!important}',
+        /* ── İZLEME SAYFASI SIDEBAR ─────────────────────────────────────────── */
+        '#player-ads{display:none!important}',
+        '#related ytd-ad-slot-renderer{display:none!important}',
+        'ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-ads"]{display:none!important}',
+        /* ── YOUTUBE PREMIUM BASKISI ─────────────────────────────────────────── */
+        'yt-mealbar-promo-renderer{display:none!important}',
+        /* ── ARAMA SAYFASI ───────────────────────────────────────────────────── */
+        'ytd-search-pyv-renderer{display:none!important}',
+        'ytd-promoted-sparkles-text-search-renderer{display:none!important}',
+    ].join('');
+    (document.head || document.documentElement).appendChild(s);
+})();
+"""
+
+
+class _AdBlockInterceptor(QWebEngineUrlRequestInterceptor):
+    """Bilinen reklam sunucularına giden istekleri engeller."""
+
+    def interceptRequest(self, info: QWebEngineUrlRequestInfo):
+        url  = info.requestUrl().toString()
+        host = info.requestUrl().host()
+        for domain in _AD_DOMAINS:
+            if domain in host:
+                info.block(True)
+                return
+        for pattern in _AD_URL_PATTERNS:
+            if pattern in url:
+                info.block(True)
+                return
 
 
 # Güncel tarayıcı User-Agent'ları
@@ -73,7 +149,6 @@ class YouTubeTab(QWidget):
     def __init__(self, settings_service=None, parent=None):
         super().__init__(parent)
         self._current_url = ""
-        self._is_logged_in = False
         self._profile = None
         self._settings = settings_service
         # Ayarlardan tarayıcı seç, "auto" ise sistem varsayılanını tespit et
@@ -110,13 +185,14 @@ class YouTubeTab(QWidget):
 
         # Geri / İleri / Yenile — set_icon ile SVG (yapıştır/indir butonlarıyla aynı sistem)
         _nav_css = """
-            QPushButton { background: #2e3348; border: none; border-radius: 6px; }
+            QPushButton { background: #2e3348; border: none; border-radius: 8px; }
             QPushButton:hover { background: #3d4460; }
         """
         self._btn_back = QPushButton()
         self._btn_back.setFixedSize(32, 32)
         self._btn_back.setToolTip("Geri")
         self._btn_back.setStyleSheet(_nav_css)
+        self._btn_back.setEnabled(False)
         set_icon(self._btn_back, "arrow_left", "#e8eaf0", 16)
         self._btn_back.clicked.connect(lambda: self._view.back())
         bar_lay.addWidget(self._btn_back)
@@ -125,6 +201,7 @@ class YouTubeTab(QWidget):
         self._btn_forward.setFixedSize(32, 32)
         self._btn_forward.setToolTip("İleri")
         self._btn_forward.setStyleSheet(_nav_css)
+        self._btn_forward.setEnabled(False)
         set_icon(self._btn_forward, "arrow_right", "#e8eaf0", 16)
         self._btn_forward.clicked.connect(lambda: self._view.forward())
         bar_lay.addWidget(self._btn_forward)
@@ -152,24 +229,31 @@ class YouTubeTab(QWidget):
         self._lbl_url.returnPressed.connect(self._on_search_or_navigate)
         bar_lay.addWidget(self._lbl_url)
 
-        # Oturum durumu butonu
-        self._btn_auth = QPushButton("Oturum Aç")
-        self._btn_auth.setFixedHeight(32)
-        self._btn_auth.setStyleSheet("""
+        # "Tarayıcıda Aç" — mevcut URL'yi sistem tarayıcısında açar
+        self._btn_open_browser = QPushButton("  Tarayıcıda Aç")
+        self._btn_open_browser.setFixedHeight(32)
+        self._btn_open_browser.setToolTip(
+            "Bu sayfayı sistem tarayıcınızda aç.\n"
+            "Oturum, indirme kalitesi ve reklam deneyimi\n"
+            "için sistem tarayıcınızı kullanmanız önerilir."
+        )
+        self._btn_open_browser.setStyleSheet("""
             QPushButton {
                 background: #2e3348; border: 1px solid #3d4460;
                 border-radius: 8px; color: #9da3b4;
-                font-size: 12px; padding: 0 12px;
+                font-size: 12px; padding: 0 12px 0 8px;
             }
-            QPushButton:hover { background: #3d4460; color: #e8eaf0; }
+            QPushButton:hover { background: #3d4460; color: #e8eaf0; border-color: #5a6080; }
         """)
-        self._btn_auth.clicked.connect(self._on_auth_clicked)
-        bar_lay.addWidget(self._btn_auth)
+        set_icon(self._btn_open_browser, "external_link", "#9da3b4", 14)
+        self._btn_open_browser.clicked.connect(self._on_open_in_browser)
+        bar_lay.addWidget(self._btn_open_browser)
 
-        # "Bu Videoyu İndir" butonu — sadece video sayfasında görünür
-        self._btn_download = QPushButton("⬇  Bu Videoyu İndir")
+        # "İndirme Yöneticisine Ekle" butonu — sadece video sayfasında görünür
+        self._btn_download = QPushButton("⬇  İndirme Yöneticisine Ekle")
         self._btn_download.setFixedHeight(32)
         self._btn_download.setVisible(False)
+        self._btn_download.setToolTip("İndirme listesine ekle")
         self._btn_download.setStyleSheet("""
             QPushButton {
                 background: #c0392b; border: none; border-radius: 8px;
@@ -203,8 +287,31 @@ class YouTubeTab(QWidget):
                     )
                     ua = _USER_AGENTS.get(self._browser_key, _DEFAULT_UA)
                     _YT_PROFILE.setHttpUserAgent(ua)
+                    # Gerçekte kullanılan dizinleri logla — kalıcılık sorunlarını ayıklamak için
+                    import logging as _logging
+                    _log = _logging.getLogger("youtube_tab")
+                    _log.info(f"[WebEngine] Profil storage: {_YT_PROFILE.persistentStoragePath()}")
+                    _log.info(f"[WebEngine] Cache: {_YT_PROFILE.cachePath()}")
+                    _log.info(f"[WebEngine] Off-the-record: {_YT_PROFILE.isOffTheRecord()}")
+
+                    # Reklam engelleyici — ağ katmanı
+                    _YT_PROFILE._interceptor = _AdBlockInterceptor()
+                    _YT_PROFILE.setUrlRequestInterceptor(_YT_PROFILE._interceptor)
+
                 self._profile = _YT_PROFILE
                 self._view = _QuietWebEngineView(profile=self._profile)
+
+                # CSS — reklam elementlerini gizler (DocumentReady)
+                # QWebEnginePage.scripts().insert() kullanılıyor (profile level
+                # bu Qt/PyQt6 sürümünde çalışmıyor).
+                css_script = QWebEngineScript()
+                css_script.setName("adblock_css")
+                css_script.setSourceCode(_ADBLOCK_CSS_JS)
+                css_script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentReady)
+                css_script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+                css_script.setRunsOnSubFrames(False)
+                self._view.page().scripts().insert(css_script)
+
             except Exception as e:
                 self._view = _QuietWebEngineView()
         else:
@@ -283,7 +390,6 @@ class YouTubeTab(QWidget):
         if not self._lbl_url.hasFocus():
             self._lbl_url.setText(url_str)
 
-        # Video sayfası mı? watch?v= içeriyorsa evet
         # Video sayfası mı? watch?v= veya /shorts/ içeriyorsa evet
         is_video = (
             ("youtube.com/watch" in url_str and "v=" in url_str)
@@ -302,11 +408,10 @@ class YouTubeTab(QWidget):
 
         url = self._view.url().toString()
 
-        # Google giriş sayfasındaysa passkey popup'ını kapat
+        # Google giriş sayfasındaysa passkey popup'ını kapat, oturum sorgusu yapma
         if "accounts.google.com" in url:
             self._view.page().runJavaScript("""
                 (function() {
-                    // Passkey/güvenlik anahtarı dialog'unu kapat
                     var selectors = [
                         'button[data-action="dismiss"]',
                         'button[jsname="LgbsSe"]',
@@ -320,8 +425,6 @@ class YouTubeTab(QWidget):
                             return 'closed';
                         }
                     }
-                    // Windows Güvenliği dialog'u native — JS ile kapatılamaz
-                    // Ama Google'ın kendi passkey overlay'i kapatılabilir
                     var overlays = document.querySelectorAll('[role="dialog"]');
                     for (var o of overlays) {
                         var btns = o.querySelectorAll('button');
@@ -335,68 +438,9 @@ class YouTubeTab(QWidget):
                     return 'not-found';
                 })()
             """, lambda result: None)
+            return  # Google sayfalarında oturum sorgusu yapma
 
-        # Oturum durumunu JS ile sorgula — birden fazla selector dene
-        self._view.page().runJavaScript("""
-            (function() {
-                var selectors = [
-                    'yt-formatted-string#account-name',
-                    '#avatar-btn[aria-label]',
-                    'button#avatar-btn',
-                    '#masthead #avatar-btn',
-                ];
-                for (var s of selectors) {
-                    var el = document.querySelector(s);
-                    if (el) {
-                        var name = el.innerText || el.getAttribute('aria-label') || '';
-                        if (name.trim()) return name.trim();
-                    }
-                }
-                // Giriş butonu varsa henüz giriş yapılmamış
-                var signIn = document.querySelector('a[href*="ServiceLogin"], ytd-button-renderer a[href*="accounts"]');
-                if (signIn) return '__not_logged_in__';
-                return '';
-            })()
-        """, self._on_js_username)
 
-    def _on_js_username(self, name: str):
-        if not hasattr(self, "_btn_auth"):
-            return
-        if name and name.strip() and name != '__not_logged_in__':
-            self._is_logged_in = True
-            display = name.strip()[:22]
-            self._btn_auth.setText(f"👤 {display}  ✕")
-            self._btn_auth.setToolTip("Oturumu Kapat")
-            self._btn_auth.setStyleSheet("""
-                QPushButton {
-                    background: #1a3a1a; border: 1px solid #28a745;
-                    border-radius: 8px; color: #28a745;
-                    font-size: 12px; padding: 0 12px;
-                }
-                QPushButton:hover { background: #c04444; border-color: #e05a5a; color: #fff; }
-            """)
-        else:
-            self._is_logged_in = False
-            self._btn_auth.setText("Oturum Aç")
-            self._btn_auth.setToolTip("YouTube hesabınızla giriş yapın")
-            # Tema rengine göre stil
-            try:
-                from ytdownloader.ui.qt.theme import theme_manager
-                is_dark = theme_manager.current == "dark"
-            except Exception:
-                is_dark = True
-            btn_bg = "#2e3348" if is_dark else "#d8dce8"
-            brd    = "#3d4460" if is_dark else "#c4c9d8"
-            clr    = "#9da3b4" if is_dark else "#6b7280"
-            hov    = "#e8eaf0" if is_dark else "#111827"
-            self._btn_auth.setStyleSheet(f"""
-                QPushButton {{
-                    background: {btn_bg}; border: 1px solid {brd};
-                    border-radius: 8px; color: {clr};
-                    font-size: 12px; padding: 0 12px;
-                }}
-                QPushButton:hover {{ background: {brd}; color: {hov}; }}
-            """)
 
     def _on_search_or_navigate(self):
         """Enter'a basılınca: URL ise git, değilse YouTube'da ara."""
@@ -417,88 +461,12 @@ class YouTubeTab(QWidget):
             self._view.load(QUrl(f"https://www.youtube.com/results?search_query={query}"))
         self._lbl_url.clearFocus()
 
-    def _on_auth_clicked(self):
-        """Giriş yapılmışsa çıkış yap, değilse giriş sayfasına git."""
-        if self._is_logged_in:
-            self._do_logout()
-        else:
-            self._do_login()
 
-    def _do_login(self):
-        """Giriş sayfasına direkt git — oturum kalıcı profilde saklanır."""
-        self._view.load(QUrl(
-            "https://accounts.google.com/signin/v2/identifier"
-            "?service=youtube&hl=tr&flowName=GlifWebSignIn"
-            "&flowEntry=ServiceLogin&skip_web_authn=true"
-        ))
-
-    def _do_logout(self):
-        """Oturumu kapat — cookie'leri temizle ve YouTube ana sayfasına dön."""
-        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
-        is_dark = True
-        try:
-            from ytdownloader.ui.qt.theme import theme_manager
-            is_dark = theme_manager.current == "dark"
-        except Exception:
-            pass
-
-        bg     = "#1a1d27" if is_dark else "#f0f2f7"
-        border = "#2e3348" if is_dark else "#d0d5e0"
-        txt    = "#e8eaf0" if is_dark else "#111827"
-        sub    = "#9da3b4" if is_dark else "#6b7280"
-
-        dlg = QDialog(self.window())
-        dlg.setWindowTitle("Oturumu Kapat")
-        dlg.setFixedWidth(300)
-        dlg.setWindowFlags(dlg.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
-        dlg.setStyleSheet(f"QDialog {{ background: {bg}; }} QLabel {{ color: {txt}; }}")
-
-        lay = QVBoxLayout(dlg)
-        lay.setContentsMargins(24, 20, 24, 20)
-        lay.setSpacing(12)
-
-        lbl = QLabel("YouTube oturumunuzu kapatmak istiyor musunuz?")
-        lbl.setWordWrap(True)
-        lbl.setStyleSheet(f"font-size:13px;color:{txt};")
-        lay.addWidget(lbl)
-
-        btn_row = QHBoxLayout()
-        btn_row.addStretch()
-
-        btn_cancel = QPushButton("Hayır")
-        btn_cancel.setFixedSize(70, 32)
-        btn_cancel.setStyleSheet(f"QPushButton{{background:transparent;border:1px solid {border};border-radius:6px;color:{sub};font-size:12px;}}QPushButton:hover{{background:{border};}}")
-        btn_cancel.clicked.connect(dlg.reject)
-        btn_row.addWidget(btn_cancel)
-
-        btn_ok = QPushButton("Oturumu Kapat")
-        btn_ok.setFixedHeight(32)
-        btn_ok.setStyleSheet("QPushButton{background:#e05a5a;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:600;padding:0 12px;}QPushButton:hover{background:#c04444;}")
-        btn_ok.clicked.connect(dlg.accept)
-        btn_row.addWidget(btn_ok)
-        lay.addLayout(btn_row)
-
-        if dlg.exec() != QDialog.DialogCode.Accepted:
-            return
-
-        # Cookie ve depolama temizle
-        if self._profile:
-            self._profile.cookieStore().deleteAllCookies()
-        self._is_logged_in = False
-        self._btn_auth.setText("Oturum Aç")
-        self._btn_auth.setStyleSheet("""
-            QPushButton {
-                background: #2e3348; border: 1px solid #3d4460;
-                border-radius: 8px; color: #9da3b4;
-                font-size: 12px; padding: 0 12px;
-            }
-            QPushButton:hover { background: #3d4460; color: #e8eaf0; }
-        """)
-        self._view.load(QUrl(self.YOUTUBE_HOME))
-
-    def _refresh_auth_button(self):
-        """Oturum durumuna göre butonu güncelle."""
-        pass  # _on_js_username ile güncelleniyor
+    def _on_open_in_browser(self):
+        """Mevcut URL'yi işletim sisteminin varsayılan tarayıcısında açar."""
+        url = self._current_url or self.YOUTUBE_HOME
+        import webbrowser
+        webbrowser.open(url)
 
     def _on_download_clicked(self):
         """İndir butonuna basılınca video URL'sini sinyal olarak yayınla."""
@@ -534,24 +502,27 @@ class YouTubeTab(QWidget):
                 f" QLineEdit:focus {{ border: 1px solid #c0392b; }}"
             )
 
-        nav_css = f"QPushButton{{background:{btn_bg};border:none;border-radius:6px;}}QPushButton:hover{{background:{btn_hov};}}"
-        # Oturum butonu — giriş yapılmışsa stilini koruyalım
-        if hasattr(self, '_btn_auth') and 'Oturum Aç' in self._btn_auth.text():
-            self._btn_auth.setStyleSheet(f"""
+        nav_css = f"QPushButton{{background:{btn_bg};border:none;border-radius:8px;}}QPushButton:hover{{background:{btn_hov};}}"
+        if hasattr(self, '_btn_open_browser'):
+            brd = '#3d4460' if is_dark else '#c4c9d8'
+            clr = '#9da3b4' if is_dark else '#6b7280'
+            hov_clr = '#e8eaf0' if is_dark else '#111827'
+            self._btn_open_browser.setStyleSheet(f"""
                 QPushButton {{
-                    background: {btn_bg}; border: 1px solid {'#3d4460' if is_dark else '#c4c9d8'};
-                    border-radius: 8px; color: {'#9da3b4' if is_dark else '#6b7280'};
-                    font-size: 12px; padding: 0 12px;
+                    background: {btn_bg}; border: 1px solid {brd};
+                    border-radius: 8px; color: {clr};
+                    font-size: 12px; padding: 0 12px 0 8px;
                 }}
-                QPushButton:hover {{ background: {btn_hov}; color: {icon_clr}; }}
+                QPushButton:hover {{ background: {btn_hov}; color: {hov_clr}; border-color: {'#5a6080' if is_dark else '#a0a8be'}; }}
             """)
+            set_icon(self._btn_open_browser, "external_link", icon_clr, 14)
         for btn, svg in [(self._btn_back,"arrow_left"),(self._btn_forward,"arrow_right"),(self._btn_reload,"refresh")]:
             btn.setStyleSheet(nav_css)
             set_icon(btn, svg, icon_clr, 16)
 
 
 class _QuietPage(QWebEnginePage):
-    """Console mesajlarını log'a yazmayan sayfa."""
+    """Console mesajlarını susturan sayfa."""
     def __init__(self, profile_or_parent=None, parent=None):
         if profile_or_parent is None:
             super().__init__()
@@ -562,7 +533,7 @@ class _QuietPage(QWebEnginePage):
             super().__init__(profile_or_parent)
 
     def javaScriptConsoleMessage(self, level, message, line, source):
-        pass   # js spam'i sustur
+        pass  # YouTube JS console çıktısını bastır
 
 
 class _QuietWebEngineView(QWebEngineView):
@@ -590,25 +561,9 @@ class _QuietWebEngineView(QWebEngineView):
         if not is_video or not self._on_send_to_manager:
             return  # Video sayfasında değilse hiç menü çıkmasın
 
-        try:
-            from ytdownloader.services.i18n_service import get_i18n
-            # Ayarlardaki aktif dili kullan
-            lang = "tr"
-            if self._settings:
-                lang = self._settings.get("language", "tr")
-            i18n = get_i18n(lang)
-            label = i18n.t("indir_yoneticiye_gonder")
-        except Exception:
-            label = "İndirme Yöneticisine Gönder"
+        label = "İndirme Yöneticisine Ekle"
 
         menu = QMenu(self)
-        menu.setStyleSheet("""
-            QMenu { background: #1a1d27; border: 1px solid #2e3348;
-                    border-radius: 8px; padding: 4px; }
-            QMenu::item { padding: 8px 20px 8px 14px; font-size: 13px;
-                          color: #e8eaf0; border-radius: 5px; }
-            QMenu::item:selected { background: #2e3348; }
-        """)
         act = menu.addAction(f"⬇  {label}")
         act.triggered.connect(lambda: self._on_send_to_manager(url))
         menu.exec(event.globalPos())

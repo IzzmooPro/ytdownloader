@@ -24,6 +24,7 @@ from ytdownloader.ui.qt.youtube_tab import YouTubeTab
 from ytdownloader.services.i18n_service import get_i18n
 from ytdownloader.infrastructure.logger import get_logger
 from ytdownloader.utils.url_utils import validate_youtube_url
+from ytdownloader.config.constants import APP_VERSION
 
 log = get_logger("main_window")
 
@@ -92,7 +93,7 @@ class MainWindow(QMainWindow):
         self.download_manager.set_sequential_mode(
             self.settings.get("sequential_mode", False)
         )
-        self.setWindowTitle(f"YouTube İndirici v1.0.0")
+        self.setWindowTitle(f"YouTube İndirici v{APP_VERSION}")
 
         # Açılışta otomatik güncelleme kontrolü — 3 saniye sonra, arka planda.
         # show_no_update=False: yeni sürüm yoksa sessiz kalır.
@@ -163,12 +164,14 @@ class MainWindow(QMainWindow):
         self.btn_paste = QPushButton()
         self.btn_paste.setObjectName("btn_paste")
         self.btn_paste.setFixedHeight(38)
+        self.btn_paste.setToolTip("Panodaki URL'yi yapıştır  (Ctrl+V)")
         self.btn_paste.clicked.connect(self.paste_url)
         tb.addWidget(self.btn_paste)
 
         self.btn_download_all = QPushButton()
         self.btn_download_all.setObjectName("btn_download_all")
         self.btn_download_all.setFixedHeight(38)
+        self.btn_download_all.setToolTip("Listedeki tüm videoları indir  (Ctrl+D)")
         self.btn_download_all.setEnabled(False)
         self.btn_download_all.clicked.connect(self.download_all)
         tb.addWidget(self.btn_download_all)
@@ -176,6 +179,7 @@ class MainWindow(QMainWindow):
         self.btn_clear = QPushButton()
         self.btn_clear.setObjectName("btn_clear")
         self.btn_clear.setFixedHeight(38)
+        self.btn_clear.setToolTip("Tüm kartları listeden kaldır")
         self.btn_clear.setEnabled(False)
         self.btn_clear.clicked.connect(self.clear_list)
         tb.addWidget(self.btn_clear)
@@ -284,16 +288,18 @@ class MainWindow(QMainWindow):
         # Tema burada uygulanır — corner artık hazır
         self._apply_theme_icon()
 
-        # ── Sekme 1: YouTube ─────────────────────────────────────────────────
+        # ── Sekme 0: İndirme Yöneticisi (ana sekme) ──────────────────────────
+        self._tabs.addTab(manager_widget, "İndirme Yöneticisi")
+
+        # ── Sekme 1: YouTube (yardımcı keşif aracı) ──────────────────────────
         self._youtube_tab = YouTubeTab(settings_service=self.settings_manager)
         self._youtube_tab.video_detected.connect(self._on_youtube_video_detected)
-        self._tabs.addTab(self._youtube_tab, "  YouTube")
-        self._tabs.setTabIcon(0, self._make_tab_icon("play", "#9da3b4"))
-
-        # ── Sekme 2: İndirme Yöneticisi ─────────────────────────────────────
-        self._tabs.addTab(manager_widget, "  İndirme Yöneticisi")
-        self._tabs.setTabIcon(1, self._make_tab_icon("download_all", "#9da3b4"))
-        self._tabs.setIconSize(QSize(16, 16))
+        self._tabs.addTab(self._youtube_tab, "YouTube")
+        self._tabs.setTabToolTip(1,
+            "Video keşfet, bağlantıyı al ve indirme listesine ekle.\n"
+            "Oturum kalıcılığı garanti edilmez — giriş gerektiren işlemler için\n"
+            "sistem tarayıcınızı kullanın."
+        )
 
         # Status bar
         self._status_bar = QStatusBar()
@@ -351,6 +357,10 @@ class MainWindow(QMainWindow):
         self._a_update_ytdlp.setVisible(False)
         self._m_tools.addAction(self._a_update_ytdlp)
 
+        self._a_history = QAction(self)
+        self._a_history.triggered.connect(self._open_history)
+        self._m_tools.addAction(self._a_history)
+
         self._a_kullanim = QAction(self)
         self._a_kullanim.triggered.connect(self._open_kullanim)
         self._m_tools.addAction(self._a_kullanim)
@@ -382,7 +392,7 @@ class MainWindow(QMainWindow):
         """Tüm UI metinlerini aktif dile çevir."""
         t = self._t
 
-        self.setWindowTitle(f"YouTube İndirici v1.0.0")
+        self.setWindowTitle(f"YouTube İndirici v{APP_VERSION}")
 
         # Toolbar butonları — _apply_theme_icon ikon+metin rengini halleder
         self._apply_theme_icon()
@@ -399,10 +409,10 @@ class MainWindow(QMainWindow):
         # Menü
         self._retranslate_menu()
 
-    def _apply_tab_style(self, bg, inactive_bg, hover_bg,
-                          color, sel_color, hov_color,
-                          border, hov_border, accent):
-        """Sekme stilini ve tüm arka planları tek seferde uygular."""
+    def _apply_tab_style(self, bg, active_bg, hover_bg,
+                          passive_color, active_color, hover_color,
+                          border, accent):
+        """Sekme stilini segmented-control görünümüyle uygular."""
 
         self._tabs.setStyleSheet(f"""
             QTabWidget {{
@@ -411,7 +421,7 @@ class MainWindow(QMainWindow):
             QTabWidget::pane {{
                 background: {bg};
                 border: 1px solid {border};
-                border-top: 2px solid {accent};
+                border-top: 1px solid {border};
             }}
             QTabBar {{
                 background: {bg};
@@ -420,25 +430,24 @@ class MainWindow(QMainWindow):
             }}
             QTabBar::tab {{
                 background: transparent;
-                color: {color};
-                padding: 8px 22px;
+                color: {passive_color};
+                padding: 9px 26px;
                 font-size: 13px;
-                font-weight: 600;
+                font-weight: 500;
                 border: none;
-                border-radius: 0px;
-                margin: 6px 3px 0px 3px;
-                min-width: 140px;
+                border-bottom: 2px solid transparent;
+                margin: 5px 2px 0px 2px;
+                min-width: 120px;
             }}
             QTabBar::tab:selected {{
-                background: {accent};
-                color: {sel_color};
-                border-radius: 8px 8px 0 0;
-                padding: 8px 22px 10px 22px;
+                background: {active_bg};
+                color: {active_color};
+                border-bottom: 2px solid {accent};
+                font-weight: 600;
             }}
             QTabBar::tab:hover:!selected {{
                 background: {hover_bg};
-                color: {hov_color};
-                border-radius: 8px 8px 0 0;
+                color: {hover_color};
             }}
             QTabBar::scroller {{ width: 0px; }}
         """)
@@ -563,14 +572,11 @@ class MainWindow(QMainWindow):
         self._a_save_list.setText(t("listeyi_kaydet"))
         self._a_quit.setText(t("cikis"))
         self._a_settings.setText(t("ayarlar"))
+        self._a_history.setText("İndirme Geçmişi")
         self._a_kullanim.setText(t("kullanim"))
         self._a_about.setText(t("hakkinda"))
 
     # ── Tema ─────────────────────────────────────────────────────────────────
-
-    def _make_tab_icon(self, icon_name: str, color: str):
-        """SVG'den QIcon oluşturur — sekme ikonları için."""
-        return make_icon(icon_name, color, 16)
 
     def _apply_theme_icon(self):
         is_dark = theme_manager.current == "dark"
@@ -590,13 +596,6 @@ class MainWindow(QMainWindow):
         self.btn_download_all.setText(f"  {t('hepsini_indir')}")
         self.btn_clear.setText(f"  {t('listeyi_temizle')}")
 
-        # Sekme ikonlarını tema rengine göre güncelle
-        tab_icon_color = "#ffffff"  # seçili sekme beyaz ikon
-        inactive_color = "#9da3b4" if is_dark else "#6b7280"
-        if hasattr(self, "_tabs"):
-            self._tabs.setTabIcon(0, self._make_tab_icon("play", inactive_color))
-            self._tabs.setTabIcon(1, self._make_tab_icon("download_all", inactive_color))
-
         # Tema butonunun kendi stili
         btn_bg  = "#2e3348" if is_dark else "#d8dce8"
         btn_hov = "#3d4460" if is_dark else "#c4c9d8"
@@ -608,19 +607,19 @@ class MainWindow(QMainWindow):
             QPushButton:hover {{ background: {btn_hov}; }}
         """)
 
-        # Sekme bar renkleri
-        tab_bg      = "#1a1d27" if is_dark else "#e8eaf0"
-        tab_sel_bg  = "#c0392b"
-        tab_hov_bg  = "#22263a" if is_dark else "#d4d8e8"
-        tab_color   = "#6b7280" if is_dark else "#8892a4"
-        tab_sel_clr = "#ffffff"
-        tab_hov_clr = "#b0b8cc" if is_dark else "#444455"
-        tab_border  = "#2e3348" if is_dark else "#c8cdd8"
-        accent      = "#c0392b"
+        # Sekme bar renkleri — segmented-control
+        tab_bg          = "#1a1d27"  if is_dark else "#e8eaf0"
+        tab_active_bg   = "#22263a"  if is_dark else "#daddf0"
+        tab_hover_bg    = "#1e2235"  if is_dark else "#e0e3ee"
+        tab_passive_clr = "#6b7280"  if is_dark else "#8892a4"
+        tab_active_clr  = "#e8eaf0"  if is_dark else "#111827"
+        tab_hover_clr   = "#9da3b4"  if is_dark else "#444455"
+        tab_border      = "#2e3348"  if is_dark else "#c8cdd8"
+        accent          = "#c0392b"
 
-        self._apply_tab_style(tab_bg, tab_sel_bg, tab_hov_bg,
-                               tab_color, tab_sel_clr, tab_hov_clr,
-                               tab_border, tab_border, accent)
+        self._apply_tab_style(tab_bg, tab_active_bg, tab_hover_bg,
+                               tab_passive_clr, tab_active_clr, tab_hover_clr,
+                               tab_border, accent)
 
         if hasattr(self, "_youtube_tab"):
             self._youtube_tab.apply_theme(theme_manager.current)
@@ -653,10 +652,6 @@ class MainWindow(QMainWindow):
             valid, _ = validate_youtube_url(url)
             if not valid:
                 continue
-            # Playlist mi kontrol et
-            if self._is_playlist_url(url):
-                self._handle_playlist(url)
-                return
             if any(c.url == url for c in self.cards):
                 continue
             self._add_card(url)
@@ -687,6 +682,12 @@ class MainWindow(QMainWindow):
             )
 
     def _add_card(self, url: str, preset_format: str = None, preset_quality: str = None):
+        # Duplicate guard — çağıran tarafta da kontrol edilmeli ama burada kesin son hat.
+        existing = next((c for c in self.cards if c.url == url), None)
+        if existing:
+            self._scroll_to_card(existing)
+            return
+
         card = VideoCard(
             url=url,
             download_manager=self.download_manager,
@@ -698,15 +699,26 @@ class MainWindow(QMainWindow):
             card._preset_format  = preset_format
             card._preset_quality = preset_quality
         card.remove_requested.connect(self._remove_card)
+        card.playlist_open_requested.connect(self._handle_playlist)
         # Sürükle-bırak
         card.mousePressEvent   = lambda e, c=card: self._drag_start(e, c)
         card.mouseMoveEvent    = lambda e, c=card: self._drag_move(e, c)
         card.mouseReleaseEvent = lambda e, c=card: self._drag_end(e, c)
-        self.cards_layout.insertWidget(self.cards_layout.count() - 1, card)
+        # cards.append ÖNCE — insertWidget Qt event processing tetikleyebilir;
+        # duplicate check bu noktadan sonra karta görür.
         self.cards.append(card)
+        self.cards_layout.insertWidget(self.cards_layout.count() - 1, card)
         self.lbl_empty.setVisible(False)
         self._update_controls()
         log.info(f"Kart eklendi: {url[:50]}")
+
+    def _scroll_to_card(self, card) -> None:
+        """Mevcut kartı görünür hale getirir ve kısa bir flash ile vurgular."""
+        self.scroll_area.ensureWidgetVisible(card)
+        # Kırmızı border flash — 600ms sonra sıfırlanır
+        orig = card.styleSheet()
+        card.setStyleSheet(orig + "\nQFrame#VideoCard { border: 2px solid #c0392b; }")
+        QTimer.singleShot(600, lambda: card.setStyleSheet(orig))
 
     # ── Sürükle-Bırak ────────────────────────────────────────────────────────
 
@@ -1032,15 +1044,23 @@ class MainWindow(QMainWindow):
 
     def _on_youtube_video_detected(self, url: str):
         """YouTube sekmesinden gelen video URL'sini ekle ve sekmeyi değiştir."""
-        if not any(c.url == url for c in self.cards):
+        existing = next((c for c in self.cards if c.url == url), None)
+        if existing:
+            self._tabs.setCurrentIndex(0)
+            self._scroll_to_card(existing)
+            self.notification_center.show(
+                "ℹ Video Zaten Listede",
+                "Bu video indirme kuyruğunda zaten mevcut.",
+                "info"
+            )
+        else:
             self._add_card(url)
-        # İndirme Yöneticisi sekmesine geç
-        self._tabs.setCurrentIndex(1)
-        self.notification_center.show(
-            "✅ Video Eklendi",
-            "İndirme Yöneticisi sekmesine geçildi.",
-            "success"
-        )
+            self._tabs.setCurrentIndex(0)
+            self.notification_center.show(
+                "✅ Video Eklendi",
+                "İndirme Yöneticisi sekmesine geçildi.",
+                "success"
+            )
 
 
     def _show_auth_dialog(self):
@@ -1069,6 +1089,21 @@ class MainWindow(QMainWindow):
     def _update_ytdlp(self):
         """yt-dlp'yi günceller — şimdilik placeholder."""
         pass
+
+    def _open_history(self):
+        from ytdownloader.ui.qt.history_dialog import HistoryDialog
+
+        def _re_download(url: str):
+            if not url:
+                return
+            existing = next((c for c in self.cards if c.url == url), None)
+            self._tabs.setCurrentIndex(0)
+            if existing:
+                self._scroll_to_card(existing)
+            else:
+                self._add_card(url)
+
+        HistoryDialog(self, self.settings_manager, re_download_cb=_re_download).exec()
 
     def _open_about(self):
         AboutDialog(self, self._i18n).exec()
@@ -1133,10 +1168,10 @@ class MainWindow(QMainWindow):
                 ("Sağ Tık", "Kart üzerinde: İndir, Sil, Konum Seç"),
             ]),
             ("▶  YouTube Sekmesi", [
-                ("YouTube", "Gömülü tarayıcıda YouTube'u açar"),
-                ("Bu Videoyu İndir", "Mevcut videoyu listeye ekler"),
-                ("Sağ Tık (Video)", "Videoyu İndirme Yöneticisine gönderir"),
-                ("Oturum Aç", "YouTube hesabınızla giriş yapın"),
+                ("YouTube", "Yardımcı sekmede video keşfetmenizi sağlar"),
+                ("İndirme Yöneticisine Ekle", "Mevcut videoyu indirme listesine ekler"),
+                ("Tarayıcıda Aç", "Mevcut sayfayı sistem tarayıcısında açar"),
+                ("Sağ Tık (Video)", "Videoyu indirme listesine gönderir"),
                 ("Shorts", "YouTube Shorts videoları da indirilebilir"),
             ]),
             ("⚙  Ayarlar", [
@@ -1364,10 +1399,7 @@ class MainWindow(QMainWindow):
         return super().eventFilter(obj, event)
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key.Key_V and event.modifiers() == Qt.KeyboardModifier.ControlModifier:
-            self.paste_url()
-        else:
-            super().keyPressEvent(event)
+        super().keyPressEvent(event)
 
     def moveEvent(self, event):
         super().moveEvent(event)

@@ -1,6 +1,6 @@
 # YouTube Downloader
 
-A Windows desktop application for downloading YouTube videos as MP4 and MP3, featuring a clean Turkish-language interface.
+A Windows desktop application focused on downloading YouTube videos and audio as MP4 / MP3, with a clean Turkish-language interface and a helper YouTube browser tab.
 
 ---
 
@@ -17,6 +17,8 @@ A Windows desktop application for downloading YouTube videos as MP4 and MP3, fea
 - Playlist support (select individual videos)
 - Download history
 - System tray integration
+- Helper YouTube tab for discovering videos and sending them to the download list
+- Playlist / Mix selection support with searchable picking dialog
 
 ---
 
@@ -62,12 +64,12 @@ python main.py
 
 ```
 ytdownloader/
-├── core/           # Download engine and thread management
+├── core/           # Download engine and queue management
 ├── infrastructure/ # Settings, logging, event bus
 ├── models/         # Data models
 ├── services/       # Notification, update, audio services
-├── ui/qt/          # All UI components
-└── assets/         # Icons and FFmpeg
+├── ui/qt/          # Desktop UI components
+└── assets/         # Icons
 ```
 
 ---

@@ -25,7 +25,7 @@ class ColorPalette:
     text_muted:    str
 
     # Accent renkler
-    accent:        str   # Mavi — ana işlem
+    accent:        str   # Kırmızı — ana işlem
     accent_hover:  str
     success:       str   # Yeşil
     warning:       str   # Turuncu
@@ -46,7 +46,7 @@ LIGHT = ColorPalette(
     bg_surface    = "#ffffff",
     bg_elevated   = "#e8ecf4",
     bg_hover      = "#dce2ef",
-    border        = "#b8bfc8",
+    border        = "#c4cad6",
     border_focus  = "#c0392b",
     text_primary  = "#1a1a2e",
     text_secondary = "#495057",
@@ -64,25 +64,25 @@ LIGHT = ColorPalette(
 )
 
 DARK = ColorPalette(
-    bg_base       = "#0f1117",
-    bg_surface    = "#1a1d27",
-    bg_elevated   = "#22263a",
-    bg_hover      = "#2a2f45",
-    border        = "#2e3348",
+    bg_base       = "#0d1018",
+    bg_surface    = "#171a25",
+    bg_elevated   = "#1e2236",
+    bg_hover      = "#272c40",
+    border        = "#2c3149",
     border_focus  = "#c0392b",
     text_primary  = "#e8eaf0",
     text_secondary = "#9da3b4",
-    text_muted    = "#6b7280",
+    text_muted    = "#5e6578",
     accent        = "#c0392b",
     accent_hover  = "#a93226",
     success       = "#2ecc71",
     warning       = "#f39c12",
     error         = "#e74c3c",
     info          = "#3498db",
-    progress_bg   = "#2e3348",
+    progress_bg   = "#252a3d",
     progress_fill = "#c0392b",
-    scroll_bg     = "#1a1d27",
-    scroll_handle = "#3d4460",
+    scroll_bg     = "#171a25",
+    scroll_handle = "#363d58",
 )
 
 
@@ -110,14 +110,14 @@ QScrollArea {{
 
 QScrollBar:vertical {{
     background: {p.scroll_bg};
-    width: 8px;
-    border-radius: 4px;
-    margin: 0;
+    width: 7px;
+    border-radius: 3px;
+    margin: 2px 1px;
 }}
 QScrollBar::handle:vertical {{
     background: {p.scroll_handle};
-    border-radius: 4px;
-    min-height: 30px;
+    border-radius: 3px;
+    min-height: 28px;
 }}
 QScrollBar::handle:vertical:hover {{
     background: {p.accent};
@@ -130,7 +130,29 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
 #topbar {{
     background-color: {p.bg_surface};
     border-bottom: 1px solid {p.border};
-    padding: 8px 16px;
+}}
+
+/* ── Input fields ───────────────────────────────────────────────────── */
+QLineEdit {{
+    background-color: {p.bg_surface};
+    border: 1px solid {p.border};
+    border-radius: 8px;
+    padding: 6px 12px;
+    color: {p.text_primary};
+    font-size: 13px;
+    selection-background-color: {p.accent};
+    selection-color: #ffffff;
+}}
+QLineEdit:focus {{
+    border-color: {p.border_focus};
+    background-color: {p.bg_elevated};
+}}
+QLineEdit:disabled {{
+    background-color: {p.bg_elevated};
+    color: {p.text_muted};
+}}
+QLineEdit::placeholder {{
+    color: {p.text_muted};
 }}
 
 /* ── Butonlar ───────────────────────────────────────────────────────── */
@@ -138,7 +160,7 @@ QPushButton {{
     background-color: {p.bg_elevated};
     color: {p.text_primary};
     border: none;
-    border-radius: 7px;
+    border-radius: 8px;
     padding: 7px 16px;
     font-weight: 600;
     font-size: 13px;
@@ -151,8 +173,9 @@ QPushButton:pressed {{
     background-color: {p.border};
 }}
 QPushButton:disabled {{
-    background-color: {p.border};
+    background-color: {p.bg_elevated};
     color: {p.text_muted};
+    border: 1px solid {p.border};
 }}
 
 QPushButton#btn_paste {{
@@ -187,7 +210,7 @@ QPushButton#btn_clear:hover {{
 }}
 QPushButton#btn_icon {{
     background-color: {p.bg_elevated};
-    border: 1.5px solid {p.border};
+    border: 1px solid {p.border};
     border-radius: 8px;
     padding: 3px 8px;
     color: {p.text_secondary};
@@ -226,35 +249,41 @@ QPushButton#btn_remove {{
     background-color: transparent;
     border: none;
     color: {p.text_muted};
-    font-size: 16px;
+    font-size: 15px;
     padding: 2px 6px;
-    border-radius: 4px;
+    border-radius: 5px;
 }}
 QPushButton#btn_remove:hover {{
-    background-color: #fee2e2;
+    background-color: {p.bg_hover};
     color: {p.error};
 }}
 
 /* ── Video Kartı ────────────────────────────────────────────────────── */
 #VideoCard {{
     background-color: {p.bg_surface};
-    border: 2px solid {p.border};
+    border: 1px solid {p.border};
     border-radius: 12px;
-    margin: 4px 8px;
+    margin: 3px 8px;
 }}
 #VideoCard:hover {{
-    border: 2px solid {p.accent};
+    border: 1px solid {p.accent};
 }}
 #VideoCard[dragging="true"] {{
     border: 2px solid #3b82f6;
-    background-color: rgba(59, 130, 246, 0.08);
+    background-color: rgba(59, 130, 246, 0.07);
+    border-radius: 12px;
+}}
+
+#VideoCardContent {{
+    background-color: {p.bg_surface};
     border-radius: 12px;
 }}
 
 #card_title {{
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
     color: {p.text_primary};
+    letter-spacing: 0.1px;
 }}
 #card_meta {{
     font-size: 11px;
@@ -270,23 +299,24 @@ QPushButton#btn_remove:hover {{
 QProgressBar {{
     background-color: {p.progress_bg};
     border: none;
-    border-radius: 5px;
-    height: 10px;
+    border-radius: 4px;
+    height: 8px;
     text-align: center;
 }}
 QProgressBar::chunk {{
-    border-radius: 5px;
+    border-radius: 4px;
     background: qlineargradient(
         x1:0, y1:0, x2:1, y2:0,
-        stop:0 {p.accent},
-        stop:1 {p.accent_hover}
+        stop:0 {p.accent_hover},
+        stop:0.4 {p.accent},
+        stop:1 {p.accent}
     );
 }}
 QProgressBar[state="success"]::chunk {{
     background: qlineargradient(
         x1:0, y1:0, x2:1, y2:0,
-        stop:0 {p.success},
-        stop:1 #20c04a
+        stop:0 #25a85c,
+        stop:1 {p.success}
     );
 }}
 QProgressBar[state="error"]::chunk {{
@@ -300,7 +330,7 @@ QProgressBar[state="warning"]::chunk {{
 QComboBox {{
     background-color: {p.bg_surface};
     border: 1px solid {p.border};
-    border-radius: 6px;
+    border-radius: 7px;
     padding: 5px 10px;
     color: {p.text_primary};
     font-size: 12px;
@@ -328,10 +358,10 @@ QComboBox::down-arrow {{
 QComboBox QAbstractItemView {{
     background-color: {p.bg_elevated};
     border: 1px solid {p.border};
-    border-radius: 0px;
+    border-radius: 8px;
     selection-background-color: {p.accent};
     selection-color: white;
-    padding: 0px;
+    padding: 4px;
     margin: 0px;
     outline: none;
     color: {p.text_primary};
@@ -339,7 +369,7 @@ QComboBox QAbstractItemView {{
 QComboBox QAbstractItemView::item {{
     background-color: {p.bg_elevated};
     color: {p.text_primary};
-    padding: 6px 12px;
+    padding: 7px 12px;
     min-height: 24px;
     border: none;
 }}
@@ -367,6 +397,64 @@ QLabel {{
     background-color: transparent;
 }}
 
+/* ── Tooltip ────────────────────────────────────────────────────────── */
+QToolTip {{
+    background-color: {p.bg_elevated};
+    color: {p.text_primary};
+    border: 1px solid {p.border};
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 12px;
+}}
+
+/* ── Table ──────────────────────────────────────────────────────────── */
+QTableWidget {{
+    background: {p.bg_base};
+    border: 1px solid {p.border};
+    border-radius: 8px;
+    gridline-color: transparent;
+    selection-background-color: {p.bg_hover};
+    selection-color: {p.text_primary};
+}}
+QTableWidget::item {{
+    padding: 8px 10px;
+    color: {p.text_primary};
+    border: none;
+}}
+QTableWidget::item:alternate {{
+    background: {p.bg_surface};
+}}
+QHeaderView::section {{
+    background: {p.bg_surface};
+    color: {p.text_muted};
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    padding: 8px 10px;
+    border: none;
+    border-bottom: 1px solid {p.border};
+}}
+
+/* ── List Widget ────────────────────────────────────────────────────── */
+QListWidget {{
+    background-color: {p.bg_base};
+    border: 1px solid {p.border};
+    border-radius: 8px;
+    outline: none;
+}}
+QListWidget::item {{
+    padding: 8px 12px;
+    color: {p.text_primary};
+    border-bottom: 1px solid {p.bg_hover};
+}}
+QListWidget::item:selected {{
+    background-color: {p.bg_elevated};
+    color: {p.text_primary};
+}}
+QListWidget::item:hover {{
+    background-color: {p.bg_surface};
+}}
+
 /* ── Status Badge ───────────────────────────────────────────────────── */
 #badge_downloading  {{ color: {p.accent};   font-weight: 700; font-size: 11px; }}
 #badge_completed    {{ color: {p.success};  font-weight: 700; font-size: 11px; }}
@@ -379,7 +467,7 @@ QLabel {{
 #statusbar {{
     background-color: {p.bg_surface};
     border-top: 1px solid {p.border};
-    padding: 6px 16px;
+    padding: 5px 16px;
     font-size: 12px;
     color: {p.text_secondary};
 }}
@@ -411,7 +499,7 @@ QMenuBar {{
 }}
 QMenuBar::item {{
     padding: 4px 10px;
-    border-radius: 4px;
+    border-radius: 5px;
 }}
 QMenuBar::item:selected {{
     background-color: {p.bg_hover};
@@ -419,29 +507,31 @@ QMenuBar::item:selected {{
 QMenu {{
     background-color: {p.bg_elevated};
     border: 1px solid {p.border};
-    border-radius: 8px;
-    padding: 4px;
+    border-radius: 10px;
+    padding: 5px 4px;
 }}
 QMenu::item {{
-    padding: 7px 20px;
-    border-radius: 4px;
+    padding: 8px 20px 8px 14px;
+    border-radius: 6px;
+    margin: 1px 4px;
     color: {p.text_primary};
 }}
 QMenu::item:selected {{
-    background-color: {p.accent};
-    color: white;
+    background-color: {p.bg_hover};
+    color: {p.text_primary};
 }}
 QMenu::separator {{
     height: 1px;
     background-color: {p.border};
-    margin: 4px 8px;
+    margin: 4px 10px;
 }}
 
 /* ── Bildirim popup ─────────────────────────────────────────────────── */
 #NotificationPopup {{
     background-color: {p.bg_elevated};
     border: 1px solid {p.border};
-    border-radius: 10px;
+    border-radius: 12px;
+    padding: 2px;
 }}
 
 /* ── Boş ekran (empty state) ────────────────────────────────────────── */
@@ -455,10 +545,10 @@ QLabel#empty_sub {{
 }}
 QLabel#empty_hint {{
     font-size: 12px;
-    color: {p.text_primary};
-    background: {p.bg_hover};
-    padding: 5px 14px;
-    border-radius: 14px;
+    color: {p.text_secondary};
+    background: {p.bg_elevated};
+    padding: 6px 16px;
+    border-radius: 16px;
     border: 1px solid {p.border};
 }}
 """

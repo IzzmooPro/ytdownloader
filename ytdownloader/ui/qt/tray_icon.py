@@ -4,6 +4,7 @@
 from PyQt6.QtWidgets import QSystemTrayIcon, QMenu, QApplication
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QPolygonF
 from PyQt6.QtCore import Qt, QPointF
+from ytdownloader.config.constants import APP_VERSION
 
 
 def _make_tray_icon(size: int = 64) -> QIcon:
@@ -32,7 +33,7 @@ class TrayIcon(QSystemTrayIcon):
     def __init__(self, main_window):
         super().__init__(_make_tray_icon(), main_window)
         self._win = main_window
-        self.setToolTip("YouTube İndirici v1.0.0")
+        self.setToolTip(f"YouTube İndirici v{APP_VERSION}")
         self._build_menu()
         self.activated.connect(self._on_activated)
 
@@ -94,6 +95,6 @@ class TrayIcon(QSystemTrayIcon):
 
     def update_tooltip(self, active: int, completed: int):
         self.setToolTip(
-            f"YouTube İndirici v1.0.0\n"
+            f"YouTube İndirici v{APP_VERSION}\n"
             f"İndiriliyor: {active}  |  Tamamlandı: {completed}"
         )

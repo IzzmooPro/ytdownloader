@@ -4,7 +4,7 @@ build-backend = "setuptools.backends.legacy:build"
 
 [project]
 name = "ytdownloader"
-version = "1.0.0"
+version = "1.1.0"
 description = "Production-grade YouTube indirici masaüstü uygulaması"
 requires-python = ">=3.11"
 
@@ -34,23 +34,20 @@ ytdownloader = "ytdownloader.main:main"
 where = ["."]
 include = ["ytdownloader*"]
 
-# ── Ruff (linter + formatter) ─────────────────────────────────────────────
 [tool.ruff]
 line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]
-ignore = ["E501"]   # satır uzunluğu ruff formatter halleder
+ignore = ["E501"]
 
-# ── mypy ─────────────────────────────────────────────────────────────────
 [tool.mypy]
 python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
-ignore_missing_imports = true   # tkinter stub yok
+ignore_missing_imports = true
 
-# ── pytest ────────────────────────────────────────────────────────────────
 [tool.pytest.ini_options]
 testpaths = ["ytdownloader/tests"]
-addopts   = "-v --tb=short"
+addopts = "-v --tb=short"
