@@ -80,8 +80,15 @@ def main():
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
 
-    # Windows toast bildirimleri için AppUserModelID zorunlu
+    # Windows: tek instance kontrolü + AppUserModelID
     if sys.platform == "win32":
+        try:
+            import ctypes
+            _mutex = ctypes.windll.kernel32.CreateMutexW(None, False, "YTDownloader_SingleInstance_v1")
+            if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+                sys.exit(0)
+        except Exception:
+            pass
         try:
             import ctypes
             APP_ID = "YTDownloader.YouTubeIndirici.1.1"
