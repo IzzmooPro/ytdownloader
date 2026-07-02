@@ -105,18 +105,20 @@ class VideoCard(QFrame):
         "error":       "#dc3545",
     }
 
-    # Durum → rozet metni (i18n) — statik dict değil: dil değişimini yansıtır
+    # Durum → rozet metni (i18n) — statik dict değil: dil değişimini yansıtır.
+    # Önek olarak emoji DEĞİL tek renk sembol kullanılır: Windows'ta ⏸/⬇ gibi
+    # emojiler renkli (mavi) render olup hap rengini bozuyordu.
     @staticmethod
     def _badge_text(state: str) -> str:
         t = get_i18n().t
         return {
             "idle":        "",
-            "queued":      "⏳ " + t("kuyrukta"),
-            "downloading": "⬇ " + t("indiriliyor"),
-            "paused":      "⏸ " + t("duraklatildi"),
-            "retrying":    "↺ " + t("yeniden_deneniyor"),
+            "queued":      "● " + t("kuyrukta"),
+            "downloading": "● " + t("indiriliyor"),
+            "paused":      "● " + t("duraklatildi"),
+            "retrying":    "● " + t("yeniden_deneniyor"),
             "completed":   "✓ " + t("tamamlandi"),
-            "error":       "⚠ " + t("hata"),
+            "error":       "● " + t("hata"),
         }.get(state, "")
 
     def __init__(self, url: str, download_manager, notification_center,
@@ -242,13 +244,13 @@ class VideoCard(QFrame):
 
         self.btn_format = QPushButton("MP3 ▾")
         self.btn_format.setObjectName("btn_icon")
-        self.btn_format.setFixedHeight(24)
+        self.btn_format.setFixedHeight(26)
         self.btn_format.clicked.connect(self._toggle_format)
         self._format = "MP3"
         fmt_row.addWidget(self.btn_format)
 
         self.cmb_resolution = QComboBox()
-        self.cmb_resolution.setFixedHeight(24)
+        self.cmb_resolution.setFixedHeight(26)
         self.cmb_resolution.addItems(["128 kbps", "192 kbps", "320 kbps"])
         self.cmb_resolution.setCurrentIndex(2)
         self.cmb_resolution.setEnabled(True)
@@ -489,26 +491,46 @@ class VideoCard(QFrame):
         set_icon(self.btn_folder, "folder", icon_clr, 17)
 
     def _apply_resolution_style(self):
-        """Kalite dropdown'ını temaya göre stillendir — QSS + QPalette ile popup rengi garantili."""
+        """Format butonu + kalite dropdown'ını temaya göre stillendir — belirgin kontrol grubu."""
         from ytdownloader.ui.qt.theme import theme_manager
         from PyQt6.QtGui import QPalette, QColor
         _dark = theme_manager.current == "dark"
-        bg  = "#1a1d27" if _dark else "#ffffff"
-        txt = "#e8eaf0" if _dark else "#111827"
-        brd = "#2e3348" if _dark else "#d0d5e0"
-        sel = "#c0392b"
+        bg    = "#1a1d27" if _dark else "#ffffff"
+        txt   = "#e8eaf0" if _dark else "#111827"
+        brd   = "#2e3348" if _dark else "#d0d5e0"
+        chip  = "#232838" if _dark else "#eef1f7"   # kontrol zemini — karttan ayrışır
+        sel   = "#c0392b"
+
+        # Format butonu — kalite kutusuyla aynı dilde, accent vurgulu
+        self.btn_format.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {chip};
+                border: 1px solid {brd};
+                border-radius: 7px;
+                padding: 0 12px;
+                font-size: 12px;
+                font-weight: 700;
+                color: {sel};
+                letter-spacing: 0.3px;
+            }}
+            QPushButton:hover {{
+                border-color: {sel};
+                background-color: {bg};
+            }}
+        """)
 
         self.cmb_resolution.setStyleSheet(f"""
             QComboBox {{
-                background-color: transparent;
+                background-color: {chip};
                 border: 1px solid {brd};
                 border-radius: 7px;
-                padding: 0px 8px;
+                padding: 0px 10px;
                 font-size: 12px;
+                font-weight: 600;
                 color: {txt};
-                min-width: 80px;
+                min-width: 88px;
             }}
-            QComboBox:hover {{ border-color: #c0392b; }}
+            QComboBox:hover {{ border-color: #c0392b; background-color: {bg}; }}
             QComboBox::drop-down {{ border: none; width: 18px; }}
             QComboBox::down-arrow {{
                 border-left: 4px solid transparent;

@@ -498,20 +498,21 @@ QListWidget::item:hover {{
     background-color: {p.bg_surface};
 }}
 
-/* ── Status Badge — hap (pill) görünümü ─────────────────────────────── */
+/* ── Status Badge — modern hap: renkli nokta + ince çerçeve ─────────── */
 #badge_downloading, #badge_completed, #badge_paused,
 #badge_error, #badge_retrying, #badge_queued {{
     font-size: 11px;
-    font-weight: 700;
-    padding: 2px 9px;
-    border-radius: 9px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    padding: 3px 10px;
+    border-radius: 10px;
 }}
-#badge_downloading  {{ color: {p.accent};   background: rgba(192, 57, 43, 0.13); }}
-#badge_completed    {{ color: {p.success};  background: rgba(40, 167, 69, 0.13); }}
-#badge_paused       {{ color: {p.warning};  background: rgba(253, 126, 20, 0.13); }}
-#badge_error        {{ color: {p.error};    background: rgba(220, 53, 69, 0.13); }}
-#badge_retrying     {{ color: {p.warning};  background: rgba(253, 126, 20, 0.13); }}
-#badge_queued       {{ color: {p.text_muted}; font-weight: 600; background: rgba(128, 134, 150, 0.12); }}
+#badge_downloading  {{ color: {p.accent};   background: rgba(192, 57, 43, 0.14);  border: 1px solid rgba(192, 57, 43, 0.35); }}
+#badge_completed    {{ color: {p.success};  background: rgba(40, 167, 69, 0.14);  border: 1px solid rgba(40, 167, 69, 0.35); }}
+#badge_paused       {{ color: {p.warning};  background: rgba(253, 126, 20, 0.14); border: 1px solid rgba(253, 126, 20, 0.35); }}
+#badge_error        {{ color: {p.error};    background: rgba(220, 53, 69, 0.14);  border: 1px solid rgba(220, 53, 69, 0.35); }}
+#badge_retrying     {{ color: {p.warning};  background: rgba(253, 126, 20, 0.14); border: 1px solid rgba(253, 126, 20, 0.35); }}
+#badge_queued       {{ color: {p.text_muted}; background: rgba(128, 134, 150, 0.12); border: 1px solid rgba(128, 134, 150, 0.30); }}
 
 /* ── Status Bar ─────────────────────────────────────────────────────── */
 #statusbar {{

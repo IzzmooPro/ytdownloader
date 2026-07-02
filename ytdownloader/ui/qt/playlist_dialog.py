@@ -59,17 +59,21 @@ class PlaylistDialog(QDialog):
     # ── UI Kurulumu ───────────────────────────────────────────────────────────
 
     def _build_ui(self):
+        # Tema paleti — dialog her açılışta güncel temayla kurulur
+        from ytdownloader.ui.qt.theme import theme_manager
+        p = theme_manager.palette
+
         root = QVBoxLayout(self)
         root.setContentsMargins(20, 20, 20, 16)
         root.setSpacing(10)
 
         # Başlık
         self.lbl_title = QLabel("Yükleniyor...")
-        self.lbl_title.setStyleSheet("font-size:15px;font-weight:600;color:#e8eaf0;")
+        self.lbl_title.setStyleSheet(f"font-size:15px;font-weight:600;color:{p.text_primary};")
         root.addWidget(self.lbl_title)
 
         self.lbl_sub = QLabel("Video listesi alınıyor, lütfen bekleyin...")
-        self.lbl_sub.setStyleSheet("font-size:12px;color:#6b7280;")
+        self.lbl_sub.setStyleSheet(f"font-size:12px;color:{p.text_secondary};")
         root.addWidget(self.lbl_sub)
 
         # İlerleme çubuğu
@@ -77,9 +81,9 @@ class PlaylistDialog(QDialog):
         self.progress.setRange(0, 0)
         self.progress.setFixedHeight(4)
         self.progress.setTextVisible(False)
-        self.progress.setStyleSheet("""
-            QProgressBar { background: #2e3348; border-radius: 2px; }
-            QProgressBar::chunk { background: #c0392b; border-radius: 2px; }
+        self.progress.setStyleSheet(f"""
+            QProgressBar {{ background: {p.progress_bg}; border-radius: 2px; }}
+            QProgressBar::chunk {{ background: {p.accent}; border-radius: 2px; }}
         """)
         root.addWidget(self.progress)
 
@@ -87,6 +91,10 @@ class PlaylistDialog(QDialog):
         self._mix_banner = QFrame()
         self._mix_banner.setObjectName("mix_banner")
         self._mix_banner.setVisible(False)
+        self._mix_banner.setStyleSheet(
+            f"QFrame#mix_banner {{ background: {p.bg_surface}; "
+            f"border: 1px solid {p.border}; border-radius: 8px; }}"
+        )
         mix_lay = QHBoxLayout(self._mix_banner)
         mix_lay.setContentsMargins(12, 6, 8, 6)
         mix_lay.setSpacing(10)
@@ -95,7 +103,9 @@ class PlaylistDialog(QDialog):
             f"YouTube Mix listeleri dinamik olabilir. "
             f"Başlangıç için ilk {_MIX_DEFAULT_LIMIT} öğe gösteriliyor."
         )
-        self._lbl_mix_info.setStyleSheet("color:#6b7280;font-size:11px;")
+        self._lbl_mix_info.setStyleSheet(
+            f"color:{p.text_secondary};font-size:11px;background:transparent;border:none;"
+        )
         self._lbl_mix_info.setWordWrap(False)
         mix_lay.addWidget(self._lbl_mix_info, stretch=1)
 
@@ -106,19 +116,11 @@ class PlaylistDialog(QDialog):
 
         root.addWidget(self._mix_banner)
 
-        # ── Arama kutusu ──────────────────────────────────────────────────────
+        # ── Arama kutusu — global QLineEdit stili tema uyumlu, inline stil yok ──
         self._search = QLineEdit()
         self._search.setPlaceholderText("Başlık veya kanal adında ara...")
         self._search.setFixedHeight(32)
         self._search.setVisible(False)  # veriler gelince açılır
-        self._search.setStyleSheet("""
-            QLineEdit {
-                background: #12141f; border: 1px solid #2e3348;
-                border-radius: 7px; padding: 0 12px;
-                color: #e8eaf0; font-size: 12px;
-            }
-            QLineEdit:focus { border-color: #c0392b; }
-        """)
         self._search.textChanged.connect(self._on_search_changed)
         root.addWidget(self._search)
 
@@ -140,26 +142,58 @@ class PlaylistDialog(QDialog):
 
         sel_bar.addStretch()
         self.lbl_sel = QLabel("")
-        self.lbl_sel.setStyleSheet("font-size:12px;color:#6b7280;")
+        self.lbl_sel.setStyleSheet(f"font-size:12px;color:{p.text_muted};")
         sel_bar.addWidget(self.lbl_sel)
         root.addLayout(sel_bar)
 
-        # ── Video listesi ─────────────────────────────────────────────────────
+        # ── Video listesi — tema uyumlu satırlar + onay kutuları ─────────────
         self.list_widget = QListWidget()
+        self.list_widget.setStyleSheet(f"""
+            QListWidget {{
+                background-color: {p.bg_base};
+                border: 1px solid {p.border};
+                border-radius: 8px;
+                outline: none;
+            }}
+            QListWidget::item {{
+                padding: 8px 10px;
+                color: {p.text_primary};
+                background-color: {p.bg_base};
+                border-bottom: 1px solid {p.bg_hover};
+            }}
+            QListWidget::item:hover {{
+                background-color: {p.bg_surface};
+            }}
+            QListWidget::item:selected {{
+                background-color: {p.bg_elevated};
+                color: {p.text_primary};
+            }}
+            QListWidget::indicator {{
+                width: 16px;
+                height: 16px;
+                border-radius: 4px;
+                border: 1.5px solid {p.border};
+                background: {p.bg_surface};
+            }}
+            QListWidget::indicator:checked {{
+                background-color: {p.accent};
+                border-color: {p.accent};
+            }}
+        """)
         self.list_widget.itemChanged.connect(self._update_sel_label)
         root.addWidget(self.list_widget)
 
         # ── Alt çubuk ─────────────────────────────────────────────────────────
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
-        line.setStyleSheet("background:#2e3348;max-height:1px;")
+        line.setStyleSheet(f"background:{p.border};max-height:1px;")
         root.addWidget(line)
 
         bot = QHBoxLayout()
         bot.setSpacing(8)
 
         fmt_lbl = QLabel("Format:")
-        fmt_lbl.setStyleSheet("font-size:12px;color:#9da3b4;")
+        fmt_lbl.setStyleSheet(f"font-size:12px;color:{p.text_secondary};")
         bot.addWidget(fmt_lbl)
 
         self.cmb_format = QComboBox()
@@ -170,7 +204,7 @@ class PlaylistDialog(QDialog):
         bot.addSpacing(4)
 
         qual_lbl = QLabel("Kalite:")
-        qual_lbl.setStyleSheet("font-size:12px;color:#9da3b4;")
+        qual_lbl.setStyleSheet(f"font-size:12px;color:{p.text_secondary};")
         bot.addWidget(qual_lbl)
 
         self.cmb_quality = QComboBox()
@@ -183,10 +217,10 @@ class PlaylistDialog(QDialog):
 
         btn_cancel = QPushButton("İptal")
         btn_cancel.setFixedSize(90, 34)
-        btn_cancel.setStyleSheet("""
-            QPushButton{background:transparent;border:1px solid #2e3348;
-                border-radius:7px;color:#9da3b4;}
-            QPushButton:hover{background:#2e3348;color:#e8eaf0;}
+        btn_cancel.setStyleSheet(f"""
+            QPushButton{{background:transparent;border:1px solid {p.border};
+                border-radius:7px;color:{p.text_secondary};}}
+            QPushButton:hover{{background:{p.bg_hover};color:{p.text_primary};}}
         """)
         btn_cancel.clicked.connect(self.reject)
         bot.addWidget(btn_cancel)
@@ -195,11 +229,11 @@ class PlaylistDialog(QDialog):
         self.btn_add.setFixedHeight(34)
         self.btn_add.setMinimumWidth(130)
         self.btn_add.setEnabled(False)
-        self.btn_add.setStyleSheet("""
-            QPushButton{background:#c0392b;border:none;border-radius:7px;
-                color:#fff;font-size:13px;font-weight:600;padding:0 16px;}
-            QPushButton:hover{background:#a93226;}
-            QPushButton:disabled{background:#3a2020;color:#6b4040;}
+        self.btn_add.setStyleSheet(f"""
+            QPushButton{{background:{p.accent};border:none;border-radius:7px;
+                color:#fff;font-size:13px;font-weight:600;padding:0 16px;}}
+            QPushButton:hover{{background:{p.accent_hover};}}
+            QPushButton:disabled{{background:{p.bg_hover};color:{p.text_muted};}}
         """)
         self.btn_add.clicked.connect(self._accept_selected)
         bot.addWidget(self.btn_add)
@@ -330,10 +364,11 @@ class PlaylistDialog(QDialog):
         self._update_sel_label()
 
     def _on_error(self, msg: str):
+        from ytdownloader.ui.qt.theme import theme_manager
         self.progress.setVisible(False)
         self.lbl_title.setText("Hata")
         self.lbl_sub.setText(msg)
-        self.lbl_sub.setStyleSheet("color:#e05a5a;font-size:12px;")
+        self.lbl_sub.setStyleSheet(f"color:{theme_manager.palette.error};font-size:12px;")
 
     # ── Tam Mix Yükleme ───────────────────────────────────────────────────────
 
