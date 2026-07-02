@@ -62,12 +62,12 @@ class ThumbnailLoader(QThread):
                         target_h = int(w * 9 / 16)
                         if h > target_h + 4:
                             px = px.copy(0, (h - target_h) // 2, w, target_h)
-                        px = px.scaled(140, 94, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                        px = px.scaled(124, 70, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                                        Qt.TransformationMode.SmoothTransformation)
-                        if px.width() > 140 or px.height() > 94:
-                            x = (px.width() - 140) // 2
-                            y = (px.height() - 94) // 2
-                            px = px.copy(x, y, 140, 94)
+                        if px.width() > 124 or px.height() > 70:
+                            x = (px.width() - 124) // 2
+                            y = (px.height() - 70) // 2
+                            px = px.copy(x, y, 124, 70)
                         self.loaded.emit(px)
                         return
             except Exception:
@@ -171,7 +171,7 @@ class VideoCard(QFrame):
     def _build_ui(self):
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.setMaximumHeight(220)
+        self.setMaximumHeight(200)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_context_menu)
 
@@ -188,8 +188,8 @@ class VideoCard(QFrame):
             lambda pos: self._show_context_menu(content.mapTo(self, pos))
         )
         content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(12, 10, 12, 10)
-        content_layout.setSpacing(6)
+        content_layout.setContentsMargins(12, 8, 12, 8)
+        content_layout.setSpacing(4)
 
         # ── Başlık satırı ──────────────────────────────────────────────
         header = QHBoxLayout()
@@ -215,9 +215,9 @@ class VideoCard(QFrame):
         middle = QHBoxLayout()
         middle.setSpacing(10)
 
-        # Thumbnail
+        # Thumbnail — 16:9, kompakt (kart yüksekliğini belirleyen ana öğe)
         self.lbl_thumb = QLabel()
-        self.lbl_thumb.setFixedSize(140, 94)
+        self.lbl_thumb.setFixedSize(124, 70)
         self.lbl_thumb.setStyleSheet(
             "background-color: #1a1d27; border-radius: 10px;"
         )
@@ -267,7 +267,7 @@ class VideoCard(QFrame):
         # olunca içerik sığmıyor ve butonlar alttan kırpılıyordu.
         ctrl_widget = QWidget()
         ctrl_widget.setFixedWidth(240)
-        ctrl_widget.setMinimumHeight(94)
+        ctrl_widget.setMinimumHeight(70)
         ctrl_col = QVBoxLayout(ctrl_widget)
         ctrl_col.setSpacing(4)
         ctrl_col.setContentsMargins(0, 0, 0, 0)
@@ -330,18 +330,18 @@ class VideoCard(QFrame):
 
         self.btn_folder = QPushButton()
         self.btn_folder.setObjectName("btn_icon")
-        self.btn_folder.setFixedSize(38, 38)
+        self.btn_folder.setFixedSize(34, 34)
         self.btn_folder.setToolTip(get_i18n().t("tt_klasor_sec"))
         self.btn_folder.clicked.connect(self._choose_folder)
-        set_icon(self.btn_folder, "folder", "#9da3b4", 17)
+        set_icon(self.btn_folder, "folder", "#9da3b4", 16)
         btn_row.addWidget(self.btn_folder)
 
         self.btn_action = QPushButton()
         self.btn_action.setObjectName("btn_action")
-        self.btn_action.setFixedSize(38, 38)
+        self.btn_action.setFixedSize(34, 34)
         self.btn_action.setToolTip(get_i18n().t("tt_indirmeyi_baslat"))
         self.btn_action.clicked.connect(self._on_action)
-        set_icon(self.btn_action, "download", "#ffffff", 17)
+        set_icon(self.btn_action, "download", "#ffffff", 16)
         # Kırmızı stili inline uygula — QSS cascade sürprizlerine karşı garanti
         self.btn_action.setStyleSheet(
             "QPushButton { background-color: #c0392b; border: none; border-radius: 8px; }"
@@ -351,19 +351,19 @@ class VideoCard(QFrame):
 
         self.btn_open_file = QPushButton()
         self.btn_open_file.setObjectName("btn_icon")
-        self.btn_open_file.setFixedSize(38, 38)
+        self.btn_open_file.setFixedSize(34, 34)
         self.btn_open_file.setToolTip(get_i18n().t("tt_klasorde_goster"))
         self.btn_open_file.clicked.connect(self._open_file)
-        set_icon(self.btn_open_file, "folder", "#28a745", 17)
+        set_icon(self.btn_open_file, "folder", "#28a745", 16)
         self.btn_open_file.setVisible(False)
         btn_row.addWidget(self.btn_open_file)
 
         self.btn_copy_path = QPushButton()
         self.btn_copy_path.setObjectName("btn_icon")
-        self.btn_copy_path.setFixedSize(38, 38)
+        self.btn_copy_path.setFixedSize(34, 34)
         self.btn_copy_path.setToolTip(get_i18n().t("tt_yol_kopyala"))
         self.btn_copy_path.clicked.connect(self._copy_path)
-        set_icon(self.btn_copy_path, "paste", "#9da3b4", 17)
+        set_icon(self.btn_copy_path, "paste", "#9da3b4", 16)
         self.btn_copy_path.setVisible(False)
         btn_row.addWidget(self.btn_copy_path)
 
@@ -474,7 +474,7 @@ class VideoCard(QFrame):
         self._btn_open_playlist.setText(btn_text)
         self._btn_open_playlist.setStyleSheet(btn_css)
         self._playlist_banner.setVisible(True)
-        self.setMaximumHeight(250)
+        self.setMaximumHeight(220)
 
     def _apply_btn_styles(self):
         """Buton stillerini temaya göre uygula — her iki temada görünür."""
@@ -488,7 +488,7 @@ class VideoCard(QFrame):
             f"QPushButton {{ background-color: {btn_bg}; border: 1.5px solid {btn_brd}; border-radius: 8px; }}"
             f"QPushButton:hover {{ background-color: {btn_hov}; border-color: #c0392b; }}"
         )
-        set_icon(self.btn_folder, "folder", icon_clr, 17)
+        set_icon(self.btn_folder, "folder", icon_clr, 16)
 
     def _apply_resolution_style(self):
         """Format butonu + kalite dropdown'ını temaya göre stillendir — belirgin kontrol grubu."""
@@ -574,11 +574,11 @@ class VideoCard(QFrame):
             view.setPalette(pal)
 
     def _set_placeholder_thumb(self):
-        px = QPixmap(140, 94)
+        px = QPixmap(124, 70)
         px.fill(QColor("#1a1d27"))
         p = QPainter(px)
         p.setPen(QPen(QColor("#3d4460"), 2))
-        p.setFont(QFont("Segoe UI", 26))
+        p.setFont(QFont("Segoe UI", 20))
         p.drawText(px.rect(), Qt.AlignmentFlag.AlignCenter, "🎵")
         p.end()
         self.lbl_thumb.setPixmap(px)
@@ -1160,7 +1160,7 @@ class VideoCard(QFrame):
             "error":       "retry",
         }
         icon_name = action_icons.get(state, "download")
-        set_icon(self.btn_action, icon_name, "#ffffff", 17)
+        set_icon(self.btn_action, icon_name, "#ffffff", 16)
 
         # Tamamlandığında buton barını gizle (hover'da açılır), diğer durumlarda her zaman göster
         is_done = state == "completed"
@@ -1172,9 +1172,9 @@ class VideoCard(QFrame):
         if is_done:
             # Küçük soluk butonlar — kart dağılmasın
             self.btn_action.setObjectName("btn_action_done")
-            self.btn_action.setFixedSize(32, 32)
-            self.btn_open_file.setFixedSize(32, 32)
-            self.btn_copy_path.setFixedSize(32, 32)
+            self.btn_action.setFixedSize(30, 30)
+            self.btn_open_file.setFixedSize(30, 30)
+            self.btn_copy_path.setFixedSize(30, 30)
             # İndirme sırasında atanan kırmızı inline stili soluk stille değiştir —
             # temizlenmezse buton tamamlanan kartta kırmızı kalıyor.
             from ytdownloader.ui.qt.theme import theme_manager as _tm2
@@ -1190,19 +1190,19 @@ class VideoCard(QFrame):
             set_icon(self.btn_copy_path, "paste", "#6b7280", 14)
         else:
             self.btn_action.setObjectName("btn_action")
-            self.btn_action.setFixedSize(38, 38)
+            self.btn_action.setFixedSize(34, 34)
             self.btn_action.setStyleSheet(
                 "QPushButton { background-color: #c0392b; border: none; border-radius: 8px; }"
                 "QPushButton:hover { background-color: #a93226; }"
             )
-            set_icon(self.btn_action, icon_name, "#ffffff", 17)
+            set_icon(self.btn_action, icon_name, "#ffffff", 16)
 
         # Style yenile
         self.btn_action.style().unpolish(self.btn_action)
         self.btn_action.style().polish(self.btn_action)
 
         # Tema-aware ikon rengi
-        set_icon(self.btn_folder, "folder", self._icon_color(), 17)
+        set_icon(self.btn_folder, "folder", self._icon_color(), 16)
 
     # ── Yardımcılar ───────────────────────────────────────────────────────────
 

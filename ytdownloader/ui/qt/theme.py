@@ -269,7 +269,7 @@ QPushButton#btn_remove:hover {{
     background-color: {p.bg_surface};
     border: 1px solid {p.border};
     border-radius: 12px;
-    margin: 3px 8px;
+    margin: 2px 8px;
 }}
 #VideoCard:hover {{
     border: 1px solid {p.accent};
