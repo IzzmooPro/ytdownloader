@@ -102,6 +102,82 @@ class MainWindow(QMainWindow):
         from PyQt6.QtCore import QTimer
         QTimer.singleShot(3000, lambda: self._update_service.check(self, show_no_update=False))
 
+        # İndirme sürerken sistemin uykuya dalmasını engelleme durumu
+        self._keep_awake_active = False
+
+        # İkinci instance başlatılırsa main.py bu işaret dosyasını bırakır;
+        # status timer görünce pencereyi öne getirir (bkz. _check_show_request)
+        self._show_flag = self.settings_manager.settings_dir / "show_window.flag"
+
+        # Önceki oturumdan kalan tamamlanmamış indirmeler varsa geri yüklemeyi öner
+        QTimer.singleShot(600, self._offer_queue_restore)
+
+    def _offer_queue_restore(self):
+        """Önceki oturumdan kalan kuyruk varsa kullanıcıya sorup geri yükler."""
+        entries = self.settings_manager.load_pending_queue()
+        if not entries:
+            return
+        n = len(entries)
+        restore = self._confirm_dialog(
+            "Kuyruğu Geri Yükle",
+            f"Önceki oturumdan {n} tamamlanmamış indirme bulundu.\n"
+            f"Listeye geri yüklensin mi? (Yarım kalanlar kaldığı yerden devam edebilir)",
+            btn_ok="Evet, Yükle", btn_cancel="Hayır",
+        )
+        # Dosya her durumda temizlenir — bir sonraki kapanışta güncel liste yazılır
+        self.settings_manager.clear_pending_queue()
+        if not restore:
+            return
+        for e in entries:
+            url = e.get("url", "")
+            if not url or self._find_card(url):
+                continue
+            card = self._add_card(
+                url,
+                preset_format=e.get("format"),
+                preset_quality=e.get("quality"),
+            )
+            if card and e.get("folder"):
+                card.download_folder = e["folder"]
+
+    def _check_show_request(self):
+        """
+        İkinci instance açılmaya çalışıldıysa bıraktığı işaret dosyasını görüp
+        pencereyi öne getirir. Status timer'dan saniyede bir çağrılır.
+        (nativeEvent/RegisterWindowMessage yerine dosya işareti: PyQt6'da
+        nativeEvent override'ı pencere oluşturulurken native çökmeye yol açtı.)
+        """
+        flag = getattr(self, "_show_flag", None)
+        if not flag:
+            return
+        try:
+            if flag.exists():
+                flag.unlink()
+                self.show()
+                self.showNormal()
+                self.raise_()
+                self.activateWindow()
+        except Exception:
+            pass
+
+    def _set_keep_awake(self, active: bool):
+        """Aktif indirme varken Windows'un uykuya geçmesini engeller."""
+        # getattr: __init__ sırasında status timer'dan erken çağrılabilir
+        if os.name != "nt" or active == getattr(self, "_keep_awake_active", False):
+            return
+        try:
+            import ctypes
+            ES_CONTINUOUS      = 0x80000000
+            ES_SYSTEM_REQUIRED = 0x00000001
+            flags = ES_CONTINUOUS | (ES_SYSTEM_REQUIRED if active else 0)
+            # c_uint32 şart: 0x80000000 işaretli 32-bit int'e sığmaz (OverflowError)
+            ret = ctypes.windll.kernel32.SetThreadExecutionState(ctypes.c_uint32(flags))
+            if ret:
+                self._keep_awake_active = active
+                log.debug(f"Uyku engelleme: {'açık' if active else 'kapalı'}")
+        except Exception:
+            pass
+
     def _setup_tray(self):
         """Sistem tepsisi ikonunu kur."""
         from PyQt6.QtWidgets import QSystemTrayIcon
@@ -353,10 +429,9 @@ class MainWindow(QMainWindow):
 
         self._m_tools.addSeparator()
 
-        # yt-dlp güncelleme (şimdilik gizli)
+        # yt-dlp güncelleme — YouTube değişikliklerinde indirme motorunu tazeler
         self._a_update_ytdlp = QAction("⬆  yt-dlp Güncelle", self)
         self._a_update_ytdlp.triggered.connect(self._update_ytdlp)
-        self._a_update_ytdlp.setVisible(False)
         self._m_tools.addAction(self._a_update_ytdlp)
 
         self._a_history = QAction(self)
@@ -498,7 +573,7 @@ class MainWindow(QMainWindow):
         dlg.setWindowTitle(title)
         dlg.setFixedWidth(420)
         dlg.setWindowFlags(
-            dlg.windowFlags() & ~__import__('PyQt6.QtCore', fromlist=['Qt']).Qt.WindowType.WindowContextHelpButtonHint
+            dlg.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint
         )
         dlg.setStyleSheet(f"""
             QDialog {{ background: {bg}; border-radius: 10px; }}
@@ -527,14 +602,11 @@ class MainWindow(QMainWindow):
         btn_row.setSpacing(10)
         btn_row.addStretch()
 
-        from PyQt6.QtWidgets import QPushButton
+        from PyQt6.QtWidgets import QPushButton, QSizePolicy
         b_cancel = QPushButton(btn_cancel)
         b_cancel.setMinimumHeight(36)
         b_cancel.setMinimumWidth(90)
-        b_cancel.setSizePolicy(
-            __import__('PyQt6.QtWidgets', fromlist=['QSizePolicy']).QSizePolicy.Policy.Preferred,
-            __import__('PyQt6.QtWidgets', fromlist=['QSizePolicy']).QSizePolicy.Policy.Fixed
-        )
+        b_cancel.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         b_cancel.setStyleSheet(f"""
             QPushButton {{ background: transparent; border: 1px solid {border};
                 border-radius: 7px; color: {sub_txt}; font-size: 13px; padding: 0 16px; }}
@@ -548,10 +620,7 @@ class MainWindow(QMainWindow):
         b_ok = QPushButton(btn_ok)
         b_ok.setMinimumHeight(36)
         b_ok.setMinimumWidth(90)
-        b_ok.setSizePolicy(
-            __import__('PyQt6.QtWidgets', fromlist=['QSizePolicy']).QSizePolicy.Policy.Preferred,
-            __import__('PyQt6.QtWidgets', fromlist=['QSizePolicy']).QSizePolicy.Policy.Fixed
-        )
+        b_ok.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         b_ok.setStyleSheet(f"""
             QPushButton {{ background: {ok_color}; border: none;
                 border-radius: 7px; color: #ffffff; font-size: 13px;
@@ -706,7 +775,7 @@ class MainWindow(QMainWindow):
         existing = self._find_card(url)
         if existing:
             self._scroll_to_card(existing)
-            return
+            return existing
 
         card = VideoCard(
             url=url,
@@ -731,6 +800,7 @@ class MainWindow(QMainWindow):
         self.lbl_empty.setVisible(False)
         self._update_controls()
         log.info(f"Kart eklendi: {url[:50]}")
+        return card
 
     def _scroll_to_card(self, card) -> None:
         """Mevcut kartı görünür hale getirir ve kısa bir flash ile vurgular."""
@@ -1120,8 +1190,67 @@ class MainWindow(QMainWindow):
             )
 
     def _update_ytdlp(self):
-        """yt-dlp'yi günceller — şimdilik placeholder."""
-        pass
+        """
+        yt-dlp'yi günceller.
+
+        EXE (frozen): yt-dlp uygulamanın içine gömülüdür, pip ile güncellenemez —
+        kullanıcı uygulama güncellemesine yönlendirilir.
+        Kaynak koddan: pip ile arka planda güncellenir, sonuç bildirimle gösterilir.
+        """
+        import sys
+        if getattr(sys, "frozen", False):
+            QMessageBox.information(
+                self, "yt-dlp Güncelleme",
+                "yt-dlp bu sürümde uygulamayla birlikte gelir.\n"
+                "İndirme sorunları yaşıyorsanız uygulamanın yeni sürümünü kontrol edin."
+            )
+            self._update_service.check(self, show_no_update=True)
+            return
+
+        if getattr(self, "_ytdlp_update_running", False):
+            return
+        self._ytdlp_update_running = True
+        self.notification_center.show("⬆ yt-dlp", "Güncelleme başlatıldı...", "info")
+
+        import threading, subprocess
+        from PyQt6.QtCore import QTimer
+
+        result = {}
+
+        def _worker():
+            try:
+                proc = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"],
+                    capture_output=True, text=True, timeout=300,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+                result["ok"]  = proc.returncode == 0
+                result["msg"] = (proc.stdout or proc.stderr or "")[-400:]
+            except Exception as e:
+                result["ok"], result["msg"] = False, str(e)
+
+        th = threading.Thread(target=_worker, daemon=True)
+        th.start()
+
+        def _poll():
+            if th.is_alive():
+                QTimer.singleShot(500, _poll)
+                return
+            self._ytdlp_update_running = False
+            if result.get("ok"):
+                already = "already satisfied" in result.get("msg", "").lower()
+                self.notification_center.show(
+                    "✅ yt-dlp",
+                    "Zaten güncel." if already else
+                    "Güncellendi. Değişikliğin etkili olması için uygulamayı yeniden başlatın.",
+                    "success"
+                )
+            else:
+                self.notification_center.show(
+                    "❌ yt-dlp", f"Güncelleme başarısız: {result.get('msg', '?')[:120]}", "error"
+                )
+
+        QTimer.singleShot(500, _poll)
 
     def _open_history(self):
         from ytdownloader.ui.qt.history_dialog import HistoryDialog
@@ -1156,7 +1285,7 @@ class MainWindow(QMainWindow):
         dlg.setWindowTitle(self._t("kullanim"))
         dlg.setFixedWidth(480)
         dlg.setMinimumHeight(500)
-        dlg.setWindowFlags(dlg.windowFlags() & ~__import__("PyQt6.QtCore", fromlist=["Qt"]).Qt.WindowType.WindowContextHelpButtonHint)
+        dlg.setWindowFlags(dlg.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
         dlg.setStyleSheet(f"QDialog {{ background: {bg}; }} QLabel {{ color: {txt}; }}")
 
         root = QVBoxLayout(dlg)
@@ -1295,6 +1424,12 @@ class MainWindow(QMainWindow):
         if tray:
             tray.update_tooltip(active, completed)
 
+        # İndirme sürerken PC uykuya dalmasın
+        self._set_keep_awake(active > 0)
+
+        # İkinci instance "beni öne getir" istediyse uygula
+        self._check_show_request()
+
         # ── Toplu tamamlanma bildirimi ─────────────────────────────────
         prev_active = getattr(self, "_prev_active", 0)
         if prev_active > 0 and active == 0 and completed > 0 and not getattr(self, "_notified_batch", False):
@@ -1386,6 +1521,7 @@ class MainWindow(QMainWindow):
                 event.ignore()
                 return
             else:
+                self._persist_queue_on_exit()
                 event.accept()
                 return
 
@@ -1394,10 +1530,12 @@ class MainWindow(QMainWindow):
             if self.settings.get("confirm_exit", True):
                 if self._confirm_dialog("Çıkış", "Uygulamadan çıkmak istediğinize emin misiniz?",
                                         btn_ok="Evet, Çık", btn_cancel="Hayır, Çıkma"):
+                    self._persist_queue_on_exit()
                     event.accept()
                 else:
                     event.ignore()
                 return
+            self._persist_queue_on_exit()
             event.accept()
             return
 
@@ -1410,20 +1548,34 @@ class MainWindow(QMainWindow):
             names_text += "\n... ve " + str(len(active) - 5) + " tane daha"
 
         body = (f"{len(active)} indirme devam ediyor.\n"
-                f"Çıkarsanız bu indirmeler iptal edilecek.\n\n"
+                f"Çıkarsanız indirmeler durdurulacak; bir sonraki açılışta\n"
+                f"kaldığı yerden devam ettirilebilecek.\n\n"
                 f"{names_text}")
 
         if self._confirm_dialog("Çıkış", body,
                                 btn_ok="Evet, Çık", btn_cancel="Hayır, Çıkma",
                                 danger=True):
-            for card in active:
-                try:
-                    self.download_manager.cancel_download(card.download_id)
-                except Exception:
-                    pass
+            # Kuyruk diske yazılır; indirmeler İPTAL EDİLMEZ — .part dosyaları
+            # kalır ki geri yüklemede kaldığı yerden devam edilebilsin.
+            # Worker'ları main.py çıkışta download_manager.shutdown() durdurur.
+            self._persist_queue_on_exit()
             event.accept()
         else:
             event.ignore()
+
+    def _persist_queue_on_exit(self):
+        """Tamamlanmamış kartları diske yazar — açılışta geri yükleme önerilir."""
+        entries = []
+        for c in self.cards:
+            if c.download_state == "completed":
+                continue
+            entries.append({
+                "url":     c.url,
+                "format":  getattr(c, "_format", None),
+                "quality": c.cmb_resolution.currentText() if c.cmb_resolution.count() else None,
+                "folder":  c.download_folder or "",
+            })
+        self.settings_manager.save_pending_queue(entries)
 
 
     def eventFilter(self, obj, event):

@@ -25,6 +25,9 @@ if str(_root) not in sys.path:
 #   frame texture upload'unda ProduceSkia başarısız olabilir → software fallback
 #   → ilk video açılış gecikmesi. GPU'yu ayrı process'te bırakmak (varsayılan)
 #   bu hatayı ortadan kaldırır.
+# --no-sandbox GEREKLİ: kaldırılınca uygulama açılıştan hemen sonra sessizce
+# çöküyor (test edildi, 2026-07). Muhtemel sebep: ASCII dışı karakter içeren
+# kurulum yolunda ("YENİLER" gibi) Chromium sandbox'ı başlatılamıyor.
 os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS",
     "--disable-background-timer-throttling "
     "--disable-renderer-backgrounding "
@@ -86,6 +89,15 @@ def main():
             import ctypes
             _mutex = ctypes.windll.kernel32.CreateMutexW(None, False, "YTDownloader_SingleInstance_v1")
             if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+                # Sessizce ölme — çalışan pencereye "öne gel" işareti bırak.
+                # MainWindow status timer'ı bu dosyayı görüp pencereyi öne getirir.
+                try:
+                    from ytdownloader.config.constants import SETTINGS_DIR_NAME
+                    _flag_dir = Path(os.environ.get("APPDATA", str(_root))) / SETTINGS_DIR_NAME
+                    _flag_dir.mkdir(parents=True, exist_ok=True)
+                    (_flag_dir / "show_window.flag").touch()
+                except Exception:
+                    pass
                 sys.exit(0)
         except Exception:
             pass

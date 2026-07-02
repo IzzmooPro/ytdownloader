@@ -9,6 +9,7 @@ Faz 1'de: şema doğrulama + migration eklenecek.
 
 import os
 import json
+import copy
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -45,9 +46,14 @@ class SettingsService:
 
         self.settings_file = self.settings_dir / "settings.json"
         self.history_file  = self.history_dir  / "download_history.json"
+        self.pending_file  = self.settings_dir / "pending_queue.json"
 
-        # Worker thread'lerden eş zamanlı update() çağrılarını korur
-        self._settings_lock = threading.Lock()
+        # Worker thread'lerden eş zamanlı update() çağrılarını korur.
+        # RLock: update() → load()/save() zinciri aynı lock'u yeniden alır.
+        self._settings_lock = threading.RLock()
+        # load() her çağrıda disk okumasın — mtime değişmedikçe cache kullanılır
+        self._cache: dict | None = None
+        self._cache_mtime: int | None = None
         # Birden fazla indirme aynı anda tamamlandığında geçmiş dosyasını
         # bozulmaktan korur (worker thread'lerden eş zamanlı çağrı)
         self._history_lock = threading.Lock()
@@ -55,19 +61,34 @@ class SettingsService:
     # ── Ayarlar ────────────────────────────────────────────
 
     def load(self) -> dict:
-        """Ayarları diskten okur. Bozuk / eksik dosyada default döner."""
-        if self.settings_file.exists():
+        """
+        Ayarları döner. Bozuk / eksik dosyada default döner.
+        Dosya mtime'ı değişmedikçe bellekteki kopya kullanılır (disk okunmaz).
+        Dönen dict her zaman bağımsız bir kopyadır — çağıran serbestçe değiştirebilir.
+        """
+        with self._settings_lock:
             try:
-                with self.settings_file.open("r", encoding="utf-8") as f:
-                    settings = json.load(f)
-                # Yeni eklenen alanları doldur
-                for key, value in DEFAULT_SETTINGS.items():
-                    if key not in settings:
-                        settings[key] = value
-                return settings  # type: ignore[no-any-return]
-            except Exception as e:
-                log.error(f"Ayarlar yüklenemedi: {e}")
-        return DEFAULT_SETTINGS.copy()
+                mtime = self.settings_file.stat().st_mtime_ns
+            except OSError:
+                mtime = None
+
+            if self._cache is not None and mtime is not None and mtime == self._cache_mtime:
+                return copy.deepcopy(self._cache)
+
+            if mtime is not None:
+                try:
+                    with self.settings_file.open("r", encoding="utf-8") as f:
+                        settings = json.load(f)
+                    # Yeni eklenen alanları doldur
+                    for key, value in DEFAULT_SETTINGS.items():
+                        if key not in settings:
+                            settings[key] = value
+                    self._cache = settings
+                    self._cache_mtime = mtime
+                    return copy.deepcopy(settings)
+                except Exception as e:
+                    log.error(f"Ayarlar yüklenemedi: {e}")
+            return DEFAULT_SETTINGS.copy()
 
     def save(self, settings: dict) -> bool:
         """
@@ -79,10 +100,17 @@ class SettingsService:
         """
         tmp_file = self.settings_file.with_suffix(".json.tmp")
         try:
-            with tmp_file.open("w", encoding="utf-8") as f:
-                json.dump(settings, f, ensure_ascii=False, indent=4)
-            # os.replace: POSIX'te atomik, Windows'ta mümkün olan en güvenli yöntem.
-            os.replace(tmp_file, self.settings_file)
+            with self._settings_lock:
+                with tmp_file.open("w", encoding="utf-8") as f:
+                    json.dump(settings, f, ensure_ascii=False, indent=4)
+                # os.replace: POSIX'te atomik, Windows'ta mümkün olan en güvenli yöntem.
+                os.replace(tmp_file, self.settings_file)
+                # Cache'i taze tut — bir sonraki load() disk okumaz
+                self._cache = copy.deepcopy(settings)
+                try:
+                    self._cache_mtime = self.settings_file.stat().st_mtime_ns
+                except OSError:
+                    self._cache_mtime = None
             return True
         except Exception as e:
             log.error(f"Ayarlar kaydedilemedi: {e}")
@@ -183,6 +211,46 @@ class SettingsService:
         except Exception as e:
             log.warning(f"Geçmiş yüklenemedi: {e}")
         return []
+
+    # ── Kalıcı Kuyruk ──────────────────────────────────────
+    # Uygulama kapanırken tamamlanmamış indirmeler buraya yazılır;
+    # bir sonraki açılışta kullanıcıya geri yükleme önerilir.
+
+    def save_pending_queue(self, entries: list[dict]) -> bool:
+        """Bekleyen indirme listesini yazar. Boş liste dosyayı temizler."""
+        try:
+            if not entries:
+                return self.clear_pending_queue()
+            tmp_file = self.pending_file.with_suffix(".json.tmp")
+            with tmp_file.open("w", encoding="utf-8") as f:
+                json.dump(entries, f, ensure_ascii=False, indent=4)
+            os.replace(tmp_file, self.pending_file)
+            return True
+        except Exception as e:
+            log.warning(f"Bekleyen kuyruk kaydedilemedi: {e}")
+            return False
+
+    def load_pending_queue(self) -> list[dict]:
+        """Kaydedilmiş bekleyen indirme listesini döner. Yoksa boş liste."""
+        try:
+            if self.pending_file.exists():
+                with self.pending_file.open("r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, list):
+                    return data
+        except Exception as e:
+            log.warning(f"Bekleyen kuyruk yüklenemedi: {e}")
+        return []
+
+    def clear_pending_queue(self) -> bool:
+        """Bekleyen kuyruk dosyasını siler."""
+        try:
+            if self.pending_file.exists():
+                self.pending_file.unlink()
+            return True
+        except Exception as e:
+            log.warning(f"Bekleyen kuyruk silinemedi: {e}")
+            return False
 
     # ── Thumbnail Cache ────────────────────────────────────
 

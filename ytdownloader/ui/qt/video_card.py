@@ -968,8 +968,12 @@ class VideoCard(QFrame):
             speed = info.get("speed", 0)
             eta   = info.get("eta", 0)
 
-            self.progress_bar.setValue(int(pct))
-            self.lbl_pct.setText(f"%{pct:.0f}")
+            # MP4'te video akışı %100 olunca ses akışı %0'dan başlar — bar
+            # geriye sıçramasın diye aynı indirme içinde tekdüze (monoton) tutulur.
+            # _reset()/_start() barı sıfırladığı için yeni indirme etkilenmez.
+            shown = max(self.progress_bar.value(), int(pct))
+            self.progress_bar.setValue(shown)
+            self.lbl_pct.setText(f"%{shown}")
 
             # NOT: "Tamamlandı" bildirimi _apply_completed'da verilir.
             # Burada %100 kontrolüyle vermek yanıltıcıydı: MP4'te video akışı
