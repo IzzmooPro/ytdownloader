@@ -26,6 +26,7 @@ from PyQt6.QtCore import (
 from PyQt6.QtGui import QPixmap, QPainter, QColor, QPen, QFont
 
 from ytdownloader.infrastructure.logger import get_logger
+from ytdownloader.services.i18n_service import get_i18n
 from ytdownloader.services.sound_service import play_complete, play_error
 from ytdownloader.ui.qt.icon_helper import set_icon
 from ytdownloader.ui.qt.speed_graph import SpeedGraph
@@ -98,16 +99,19 @@ class VideoCard(QFrame):
         "error":       "#dc3545",
     }
 
-    # Durum → rozet metni
-    STATE_BADGES = {
-        "idle":        "",
-        "queued":      "⏳ Kuyrukta",
-        "downloading": "⬇ İndiriliyor",
-        "paused":      "⏸ Duraklatıldı",
-        "retrying":    "↺ Yeniden Deneniyor",
-        "completed":   "✓ Tamamlandı",
-        "error":       "⚠ Hata",
-    }
+    # Durum → rozet metni (i18n) — statik dict değil: dil değişimini yansıtır
+    @staticmethod
+    def _badge_text(state: str) -> str:
+        t = get_i18n().t
+        return {
+            "idle":        "",
+            "queued":      "⏳ " + t("kuyrukta"),
+            "downloading": "⬇ " + t("indiriliyor"),
+            "paused":      "⏸ " + t("duraklatildi"),
+            "retrying":    "↺ " + t("yeniden_deneniyor"),
+            "completed":   "✓ " + t("tamamlandi"),
+            "error":       "⚠ " + t("hata"),
+        }.get(state, "")
 
     def __init__(self, url: str, download_manager, notification_center,
                  settings_manager, parent=None):
@@ -183,7 +187,7 @@ class VideoCard(QFrame):
         header = QHBoxLayout()
         header.setSpacing(6)
 
-        self.lbl_title = QLabel("Yükleniyor...")
+        self.lbl_title = QLabel(get_i18n().t("yukleniyor"))
         self.lbl_title.setObjectName("card_title")
         self.lbl_title.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
@@ -315,7 +319,7 @@ class VideoCard(QFrame):
         self.btn_folder = QPushButton()
         self.btn_folder.setObjectName("btn_icon")
         self.btn_folder.setFixedSize(38, 38)
-        self.btn_folder.setToolTip("Kayıt klasörünü seç")
+        self.btn_folder.setToolTip(get_i18n().t("tt_klasor_sec"))
         self.btn_folder.clicked.connect(self._choose_folder)
         set_icon(self.btn_folder, "folder", "#9da3b4", 17)
         btn_row.addWidget(self.btn_folder)
@@ -323,7 +327,7 @@ class VideoCard(QFrame):
         self.btn_action = QPushButton()
         self.btn_action.setObjectName("btn_action")
         self.btn_action.setFixedSize(38, 38)
-        self.btn_action.setToolTip("İndirmeyi başlat")
+        self.btn_action.setToolTip(get_i18n().t("tt_indirmeyi_baslat"))
         self.btn_action.clicked.connect(self._on_action)
         set_icon(self.btn_action, "download", "#ffffff", 17)
         btn_row.addWidget(self.btn_action)
@@ -331,7 +335,7 @@ class VideoCard(QFrame):
         self.btn_open_file = QPushButton()
         self.btn_open_file.setObjectName("btn_icon")
         self.btn_open_file.setFixedSize(38, 38)
-        self.btn_open_file.setToolTip("Klasörde göster")
+        self.btn_open_file.setToolTip(get_i18n().t("tt_klasorde_goster"))
         self.btn_open_file.clicked.connect(self._open_file)
         set_icon(self.btn_open_file, "folder", "#28a745", 17)
         self.btn_open_file.setVisible(False)
@@ -340,7 +344,7 @@ class VideoCard(QFrame):
         self.btn_copy_path = QPushButton()
         self.btn_copy_path.setObjectName("btn_icon")
         self.btn_copy_path.setFixedSize(38, 38)
-        self.btn_copy_path.setToolTip("Dosya yolunu kopyala")
+        self.btn_copy_path.setToolTip(get_i18n().t("tt_yol_kopyala"))
         self.btn_copy_path.clicked.connect(self._copy_path)
         set_icon(self.btn_copy_path, "paste", "#9da3b4", 17)
         self.btn_copy_path.setVisible(False)
@@ -367,10 +371,10 @@ class VideoCard(QFrame):
         banner_lay.setContentsMargins(2, 4, 2, 0)
         banner_lay.setSpacing(8)
 
-        self._lbl_playlist_info = QLabel("Bu video bir oynatma listesine ait")
+        self._lbl_playlist_info = QLabel(get_i18n().t("playlist_ait"))
         self._lbl_playlist_info.setStyleSheet("color: #6b7280; font-size: 11px;")
 
-        self._btn_open_playlist = QPushButton("Playlist olarak aç")
+        self._btn_open_playlist = QPushButton(get_i18n().t("playlist_olarak_ac"))
         self._btn_open_playlist.setFixedHeight(22)
         self._btn_open_playlist.setStyleSheet("""
             QPushButton {
@@ -406,13 +410,14 @@ class VideoCard(QFrame):
         """
         is_mix = (kind == "mix")
 
+        t = get_i18n().t
         if is_mix:
             info_text = (
-                f"YouTube Mix'ine ait  ·  {playlist_title}"
+                f"{t('mix_ait_isimli')}  ·  {playlist_title}"
                 if playlist_title
-                else "Bu bağlantı YouTube'un otomatik oynatma listesini içeriyor"
+                else t("mix_ait")
             )
-            btn_text  = "Mix'i Aç"
+            btn_text  = t("mix_ac")
             # Pasif — gri ton, hover kırmızıya gitmiyor
             info_css  = "color: #4e5568; font-size: 11px;"
             btn_css   = """
@@ -425,11 +430,11 @@ class VideoCard(QFrame):
             """
         else:
             info_text = (
-                f"Oynatma listesine ait  ·  {playlist_title}"
+                f"{t('playlist_ait_isimli')}  ·  {playlist_title}"
                 if playlist_title
-                else "Bu video bir oynatma listesine ait"
+                else t("playlist_ait")
             )
-            btn_text  = "Playlist olarak aç"
+            btn_text  = t("playlist_olarak_ac")
             # Normal — mevcut stil
             info_css  = "color: #6b7280; font-size: 11px;"
             btn_css   = """
@@ -574,7 +579,7 @@ class VideoCard(QFrame):
 
     def _retry_fetch(self):
         """Metadata fetch'i yeniden başlat."""
-        self.lbl_title.setText("Yeniden yükleniyor...")
+        self.lbl_title.setText(get_i18n().t("yeniden_yukleniyor"))
         self.lbl_channel.setText("")
         self.lbl_channel.setTextFormat(Qt.TextFormat.AutoText)
         self.lbl_channel.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
@@ -591,9 +596,10 @@ class VideoCard(QFrame):
 
     def _on_info_received(self, success: bool, data: dict, err: str):
         if not success:
-            self.lbl_title.setText("Video bilgisi yüklenemedi")
+            t = get_i18n().t
+            self.lbl_title.setText(t("video_bilgisi_yuklenemedi"))
             self.lbl_channel.setText(
-                '<a href="#retry" style="color:#c0392b;text-decoration:none;">↺ Yeniden dene</a>'
+                f'<a href="#retry" style="color:#c0392b;text-decoration:none;">↺ {t("yeniden_dene")}</a>'
             )
             self.lbl_channel.setTextFormat(Qt.TextFormat.RichText)
             self.lbl_channel.setTextInteractionFlags(
@@ -623,7 +629,7 @@ class VideoCard(QFrame):
         if upload:
             meta_parts.append(upload)
         if views:
-            meta_parts.append(f"{views:,} görüntülenme")
+            meta_parts.append(f"{views:,} {get_i18n().t('goruntulenme')}")
         self.lbl_meta.setText("  ·  ".join(meta_parts))
 
         # Çözünürlük listesi
@@ -745,7 +751,7 @@ class VideoCard(QFrame):
                     desktop = str(Path.home())
                 default_dir = last if last and os.path.exists(last) else desktop
                 folder = QFileDialog.getExistingDirectory(
-                    self, "İndirme Klasörü Seç", default_dir
+                    self, get_i18n().t("indirme_klasoru_sec"), default_dir
                 )
                 if not folder:
                     return
@@ -848,46 +854,48 @@ class VideoCard(QFrame):
         final_file = getattr(self, "_final_file", "")
         download_id = self.download_id
 
+        t = get_i18n().t
+
         # ── Grup 1: İndirme eylemi ─────────────────────────────────────
         if state == "idle":
-            a = menu.addAction("İndir")
+            a = menu.addAction(t("indir"))
             a.triggered.connect(self._on_action)
         elif state in ("downloading", "queued"):
-            a = menu.addAction("Duraklat")
+            a = menu.addAction(t("duraklat"))
             a.triggered.connect(self._on_action)
         elif state == "paused":
-            a = menu.addAction("Devam Et")
+            a = menu.addAction(t("devam_et"))
             a.triggered.connect(self._on_action)
         elif state in ("completed", "error"):
-            a = menu.addAction("Yeniden İndir")
+            a = menu.addAction(t("yeniden_indir"))
             a.triggered.connect(self._on_action)
 
         if state == "completed" and final_file:
-            a = menu.addAction("Klasörde Göster")
+            a = menu.addAction(t("klasorde_goster"))
             a.triggered.connect(self._open_file)
 
         if state in ("idle", "error", "paused"):
-            a = menu.addAction("İndirme Konumunu Seç")
+            a = menu.addAction(t("indirme_konumu_sec"))
             a.triggered.connect(self._choose_folder)
 
         menu.addSeparator()
 
         # ── Grup 2: Kopyala ────────────────────────────────────────────
-        a = menu.addAction("URL'yi Kopyala")
+        a = menu.addAction(t("url_kopyala"))
         a.triggered.connect(lambda: QApplication.clipboard().setText(url))
 
-        a = menu.addAction("Başlığı Kopyala")
+        a = menu.addAction(t("basligi_kopyala"))
         a.triggered.connect(lambda: QApplication.clipboard().setText(title))
 
         if state == "completed" and final_file:
-            a = menu.addAction("Dosya Yolunu Kopyala")
+            a = menu.addAction(t("dosya_yolunu_kopyala"))
             a.triggered.connect(self._copy_path)
 
         menu.addSeparator()
 
         # ── Grup 3: Kaldır — kırmızı renk için QWidgetAction ──────────
         from PyQt6.QtWidgets import QWidgetAction
-        remove_label = QLabel("Listeden Kaldır")
+        remove_label = QLabel(t("listeden_kaldir"))
         remove_label.setContentsMargins(12, 7, 18, 7)
         remove_label.setStyleSheet(f"""
             QLabel {{
@@ -932,12 +940,14 @@ class VideoCard(QFrame):
         if path and os.path.exists(path):
             from PyQt6.QtWidgets import QApplication
             QApplication.clipboard().setText(path)
-            self.notification_center.show("📋 Kopyalandı", os.path.basename(path), "info")
+            self.notification_center.show(
+                "📋 " + get_i18n().t("kopyalandi"), os.path.basename(path), "info"
+            )
 
     def _choose_folder(self):
         last = self.settings.get("last_download_folder", "")
         folder = QFileDialog.getExistingDirectory(
-            self, "İndirme Klasörü Seç",
+            self, get_i18n().t("indirme_klasoru_sec"),
             last if last and os.path.exists(last) else str(Path.home())
         )
         if folder:
@@ -1013,7 +1023,7 @@ class VideoCard(QFrame):
             self._set_state("completed")
             if self.settings.get("notify_complete", True):
                 self.notification_center.show(
-                    "✅ İndirme Tamamlandı",
+                    "✅ " + get_i18n().t("indirme_tamamlandi"),
                     self.full_title,
                     "success"
                 )
@@ -1042,7 +1052,7 @@ class VideoCard(QFrame):
             self.lbl_error.setVisible(True)
             if self.settings.get("notify_error", True):
                 self.notification_center.show(
-                    "❌ İndirme Hatası",
+                    "❌ " + get_i18n().t("indirme_hatasi"),
                     self.full_title,
                     "error"
                 )
@@ -1081,7 +1091,7 @@ class VideoCard(QFrame):
         self.download_state = state
         color = self.STATE_COLORS.get(state, "#c0392b")  # noqa — renk badge için kullanılıyor
 
-        badge = self.STATE_BADGES.get(state, "")
+        badge = self._badge_text(state)
         self.lbl_badge.setObjectName(f"badge_{state}")
         self.lbl_badge.setText(badge)
         self.lbl_badge.style().unpolish(self.lbl_badge)

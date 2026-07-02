@@ -78,7 +78,8 @@ class TestValidateYoutubeUrl:
 
 class TestFormatDuration:
     def test_seconds_only(self):
-        assert format_duration(45) == "45 sn"
+        # Dilden bağımsız gösterim: "45 sn" değil "0:45"
+        assert format_duration(45) == "0:45"
 
     def test_minutes_and_seconds(self):
         assert format_duration(125) == "2:05"

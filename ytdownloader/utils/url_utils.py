@@ -110,7 +110,8 @@ def format_duration(seconds: int | None) -> str:
     if not seconds:
         return ""
     if seconds < 60:
-        return f"{seconds} sn"
+        # Dilden bağımsız gösterim — "19 sn" yerine "0:19"
+        return f"0:{seconds:02d}"
     if seconds < 3600:
         m, s = divmod(seconds, 60)
         return f"{m}:{s:02d}"

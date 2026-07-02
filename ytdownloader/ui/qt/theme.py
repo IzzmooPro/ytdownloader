@@ -277,6 +277,11 @@ QPushButton#btn_remove:hover {{
 #VideoCardContent {{
     background-color: {p.bg_surface};
     border-radius: 12px;
+    border: 1px solid transparent;
+}}
+/* Hover'da hafif kenarlık — kart "dokunulabilir" hissi verir */
+#VideoCardContent:hover {{
+    border: 1px solid {p.border};
 }}
 
 #card_title {{
@@ -455,13 +460,20 @@ QListWidget::item:hover {{
     background-color: {p.bg_surface};
 }}
 
-/* ── Status Badge ───────────────────────────────────────────────────── */
-#badge_downloading  {{ color: {p.accent};   font-weight: 700; font-size: 11px; }}
-#badge_completed    {{ color: {p.success};  font-weight: 700; font-size: 11px; }}
-#badge_paused       {{ color: {p.warning};  font-weight: 700; font-size: 11px; }}
-#badge_error        {{ color: {p.error};    font-weight: 700; font-size: 11px; }}
-#badge_retrying     {{ color: {p.warning};  font-weight: 700; font-size: 11px; }}
-#badge_queued       {{ color: {p.text_muted}; font-size: 11px; }}
+/* ── Status Badge — hap (pill) görünümü ─────────────────────────────── */
+#badge_downloading, #badge_completed, #badge_paused,
+#badge_error, #badge_retrying, #badge_queued {{
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 9px;
+}}
+#badge_downloading  {{ color: {p.accent};   background: rgba(192, 57, 43, 0.13); }}
+#badge_completed    {{ color: {p.success};  background: rgba(40, 167, 69, 0.13); }}
+#badge_paused       {{ color: {p.warning};  background: rgba(253, 126, 20, 0.13); }}
+#badge_error        {{ color: {p.error};    background: rgba(220, 53, 69, 0.13); }}
+#badge_retrying     {{ color: {p.warning};  background: rgba(253, 126, 20, 0.13); }}
+#badge_queued       {{ color: {p.text_muted}; font-weight: 600; background: rgba(128, 134, 150, 0.12); }}
 
 /* ── Status Bar ─────────────────────────────────────────────────────── */
 #statusbar {{

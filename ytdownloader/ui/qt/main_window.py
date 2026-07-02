@@ -86,6 +86,7 @@ class MainWindow(QMainWindow):
         self._build_menu()
         self._apply_theme()
         self._start_status_timer()
+        self.setAcceptDrops(True)   # tarayıcıdan URL sürükle-bırak
         if self.settings.get("minimize_to_tray", True):
             self._setup_tray()
         self.setMinimumSize(900, 600)
@@ -117,12 +118,11 @@ class MainWindow(QMainWindow):
         entries = self.settings_manager.load_pending_queue()
         if not entries:
             return
-        n = len(entries)
+        t = self._t
         restore = self._confirm_dialog(
-            "Kuyruğu Geri Yükle",
-            f"Önceki oturumdan {n} tamamlanmamış indirme bulundu.\n"
-            f"Listeye geri yüklensin mi? (Yarım kalanlar kaldığı yerden devam edebilir)",
-            btn_ok="Evet, Yükle", btn_cancel="Hayır",
+            t("kuyruk_geri_baslik"),
+            t("kuyruk_geri_govde", n=len(entries)),
+            btn_ok=t("evet_yukle"), btn_cancel=t("hayir"),
         )
         # Dosya her durumda temizlenir — bir sonraki kapanışta güncel liste yazılır
         self.settings_manager.clear_pending_queue()
@@ -242,14 +242,12 @@ class MainWindow(QMainWindow):
         self.btn_paste = QPushButton()
         self.btn_paste.setObjectName("btn_paste")
         self.btn_paste.setFixedHeight(38)
-        self.btn_paste.setToolTip("Panodaki URL'yi yapıştır  (Ctrl+V)")
         self.btn_paste.clicked.connect(self.paste_url)
         tb.addWidget(self.btn_paste)
 
         self.btn_download_all = QPushButton()
         self.btn_download_all.setObjectName("btn_download_all")
         self.btn_download_all.setFixedHeight(38)
-        self.btn_download_all.setToolTip("Listedeki tüm videoları indir  (Ctrl+D)")
         self.btn_download_all.setEnabled(False)
         self.btn_download_all.clicked.connect(self.download_all)
         tb.addWidget(self.btn_download_all)
@@ -257,7 +255,6 @@ class MainWindow(QMainWindow):
         self.btn_clear = QPushButton()
         self.btn_clear.setObjectName("btn_clear")
         self.btn_clear.setFixedHeight(38)
-        self.btn_clear.setToolTip("Tüm kartları listeden kaldır")
         self.btn_clear.setEnabled(False)
         self.btn_clear.clicked.connect(self.clear_list)
         tb.addWidget(self.btn_clear)
@@ -314,21 +311,21 @@ class MainWindow(QMainWindow):
         _ico_lbl.setStyleSheet("background:transparent; margin-bottom:4px;")
         ev.addWidget(_ico_lbl)
 
-        # Başlık
-        _title_lbl = QLabel("Videoları buraya ekle")
-        _title_lbl.setObjectName("empty_title")
-        _title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _title_lbl.setStyleSheet(
+        # Başlık — metinler _retranslate_ui_only'de atanır (i18n)
+        self._empty_title = QLabel()
+        self._empty_title.setObjectName("empty_title")
+        self._empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_title.setStyleSheet(
             "font-size:22px; font-weight:700; color:#c0392b; background:transparent;"
         )
-        ev.addWidget(_title_lbl)
+        ev.addWidget(self._empty_title)
 
         # Alt açıklama
-        _sub_lbl = QLabel("YouTube URL'sini yapıştır veya YouTube sekmesinden video seç")
-        _sub_lbl.setObjectName("empty_sub")
-        _sub_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _sub_lbl.setWordWrap(True)
-        ev.addWidget(_sub_lbl)
+        self._empty_sub = QLabel()
+        self._empty_sub.setObjectName("empty_sub")
+        self._empty_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_sub.setWordWrap(True)
+        ev.addWidget(self._empty_sub)
 
         ev.addSpacing(4)
 
@@ -339,9 +336,11 @@ class MainWindow(QMainWindow):
         hl.setSpacing(8)
         hl.setContentsMargins(0, 0, 0, 0)
         hl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        for text in ["Ctrl+V  Yapıştır", "Ctrl+D  Hepsini İndir", "Playlist desteği"]:
-            chip = QLabel(text)
+        self._empty_chips = []
+        for _ in range(3):
+            chip = QLabel()
             chip.setObjectName("empty_hint")
+            self._empty_chips.append(chip)
             hl.addWidget(chip)
         ev.addWidget(_hints)
 
@@ -367,7 +366,7 @@ class MainWindow(QMainWindow):
         self._apply_theme_icon()
 
         # ── Sekme 0: İndirme Yöneticisi (ana sekme) ──────────────────────────
-        self._tabs.addTab(manager_widget, "İndirme Yöneticisi")
+        self._tabs.addTab(manager_widget, self._t("tab_indirme_yoneticisi"))
 
         # ── Sekme 1: YouTube (yardımcı keşif aracı) ──────────────────────────
         self._youtube_tab = YouTubeTab(settings_service=self.settings_manager)
@@ -429,9 +428,13 @@ class MainWindow(QMainWindow):
 
         self._m_tools.addSeparator()
 
-        # yt-dlp güncelleme — YouTube değişikliklerinde indirme motorunu tazeler
-        self._a_update_ytdlp = QAction("⬆  yt-dlp Güncelle", self)
+        # yt-dlp güncelleme — indirme MOTORUNU tazeler (uygulama güncellemesinden
+        # ayrı bir şey). EXE'de motor gömülü olduğundan pip ile güncellenemez;
+        # kafa karışıklığı olmasın diye menüde yalnızca kaynak kurulumda görünür.
+        import sys as _sys
+        self._a_update_ytdlp = QAction(self)
         self._a_update_ytdlp.triggered.connect(self._update_ytdlp)
+        self._a_update_ytdlp.setVisible(not getattr(_sys, "frozen", False))
         self._m_tools.addAction(self._a_update_ytdlp)
 
         self._a_history = QAction(self)
@@ -459,32 +462,43 @@ class MainWindow(QMainWindow):
         self.btn_paste.setText(f"  {t('yapistir')}")
         self.btn_download_all.setText(f"  {t('hepsini_indir')}")
         self.btn_clear.setText(f"  {t('listeyi_temizle')}")
+        self.btn_paste.setToolTip(t("tt_pano"))
+        self.btn_download_all.setToolTip(t("tt_hepsini"))
+        self.btn_clear.setToolTip(t("tt_temizle"))
         self.filter_lbl.setText(t("goster"))
         self._filter_buttons["all"].setText(t("tumu"))
         self._filter_buttons["active"].setText(t("indiriliyor"))
         self._filter_buttons["done"].setText(t("tamamlandi"))
+        # Sekme + boş ekran metinleri
+        if hasattr(self, "_tabs") and self._tabs.count() > 0:
+            self._tabs.setTabText(0, t("tab_indirme_yoneticisi"))
+        if hasattr(self, "_empty_title"):
+            self._empty_title.setText(t("bos_baslik"))
+            self._empty_sub.setText(t("bos_alt"))
+            hints = [f"Ctrl+V  {t('yapistir')}",
+                     f"Ctrl+D  {t('hepsini_indir')}",
+                     t("playlist_destegi")]
+            for chip, text in zip(self._empty_chips, hints):
+                chip.setText(text)
         self._update_status()
 
     def retranslate(self):
         """Tüm UI metinlerini aktif dile çevir."""
-        t = self._t
-
         self.setWindowTitle(f"YouTube İndirici v{APP_VERSION}")
 
         # Toolbar butonları — _apply_theme_icon ikon+metin rengini halleder
         self._apply_theme_icon()
 
-        # Filtre
-        self.filter_lbl.setText(t("goster"))
-        self._filter_buttons["all"].setText(t("tumu"))
-        self._filter_buttons["active"].setText(t("indiriliyor"))
-        self._filter_buttons["done"].setText(t("tamamlandi"))
-
-        # Status bar
-        self._update_status()
+        # Toolbar/filtre/sekme/boş ekran metinleri
+        self._retranslate_ui_only()
 
         # Menü
         self._retranslate_menu()
+
+        # Tepsi menüsü
+        tray = getattr(self, "_tray", None)
+        if tray and hasattr(tray, "retranslate"):
+            tray.retranslate()
 
     def _apply_tab_style(self, bg, active_bg, hover_bg,
                           passive_color, active_color, hover_color,
@@ -643,7 +657,8 @@ class MainWindow(QMainWindow):
         self._a_save_list.setText(t("listeyi_kaydet"))
         self._a_quit.setText(t("cikis"))
         self._a_settings.setText(t("ayarlar"))
-        self._a_history.setText("İndirme Geçmişi")
+        self._a_history.setText(t("gecmis"))
+        self._a_update_ytdlp.setText("⬆  " + t("ytdlp_guncelle"))
         self._a_kullanim.setText(t("kullanim"))
         self._a_about.setText(t("hakkinda"))
 
@@ -731,6 +746,10 @@ class MainWindow(QMainWindow):
         text = QApplication.clipboard().text().strip()
         if not text:
             return
+        self._add_urls_from_text(text)
+
+    def _add_urls_from_text(self, text: str):
+        """Metindeki geçerli YouTube URL'lerini karta çevirir (yapıştır + sürükle-bırak)."""
         urls = [u.strip() for u in text.splitlines() if u.strip()]
         added = 0
         for url in urls:
@@ -749,6 +768,28 @@ class MainWindow(QMainWindow):
             self.notification_center.show(
                 self._t("liste_yuklendi"), self._t("url_eklendi", n=added), "success"
             )
+
+    # ── Sürükle-Bırak (URL) ─────────────────────────────────────────────────
+    # Tarayıcıdan adres çubuğu/bağlantı sürüklenince kart olarak ekle.
+
+    def dragEnterEvent(self, event):
+        md = event.mimeData()
+        if md.hasUrls() or md.hasText():
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dropEvent(self, event):
+        md = event.mimeData()
+        parts = []
+        if md.hasUrls():
+            parts.extend(u.toString() for u in md.urls())
+        if md.hasText():
+            parts.append(md.text())
+        text = "\n".join(p for p in parts if p).strip()
+        if text:
+            self._add_urls_from_text(text)
+            event.acceptProposedAction()
 
     def _is_playlist_url(self, url: str) -> bool:
         import urllib.parse
@@ -1056,15 +1097,15 @@ class MainWindow(QMainWindow):
     def clear_list(self):
         if not self.cards:
             return
+        t = self._t
         active_n = sum(1 for c in self.cards
                        if c.download_state in ("downloading", "queued", "paused"))
         if active_n:
-            msg = (f"{active_n} indirme devam ediyor ve iptal edilecek.\n"
-                   f"Listedeki {len(self.cards)} kartın tümü kaldırılacak.")
+            msg = t("temizle_soru_aktif", a=active_n, n=len(self.cards))
         else:
-            msg = f"Listedeki {len(self.cards)} kartın tümü kaldırılacak."
-        if not self._confirm_dialog("Listeyi Temizle", msg,
-                                    btn_ok="Evet, Temizle", btn_cancel="Vazgeç",
+            msg = t("temizle_soru", n=len(self.cards))
+        if not self._confirm_dialog(t("listeyi_temizle"), msg,
+                                    btn_ok=t("evet_temizle"), btn_cancel=t("vazgec"),
                                     danger=active_n > 0):
             return
         for card in self.cards[:]:
@@ -1446,10 +1487,10 @@ class MainWindow(QMainWindow):
             else:
                 size_str = f"{total_bytes/1024:.0f} KB"
 
-            err_str = f", {errors} hata" if errors > 0 else ""
+            err_str = f", {self._t('n_hata', n=errors)}" if errors > 0 else ""
             self.notification_center.show(
-                "✅  İndirmeler Tamamlandı",
-                f"{completed} video indirildi · {size_str}{err_str}",
+                "✅  " + self._t("indirmeler_tamamlandi"),
+                f"{self._t('n_video_indirildi', n=completed)} · {size_str}{err_str}",
                 "success"
             )
             self._notified_batch = True
@@ -1471,12 +1512,13 @@ class MainWindow(QMainWindow):
 
         size_str = ""
         if total_bytes > 0:
+            _dl = self._t("indirildi_ek")
             if total_bytes >= 1024 * 1024 * 1024:
-                size_str = f"  |  {total_bytes/1024/1024/1024:.1f} GB indirildi"
+                size_str = f"  |  {total_bytes/1024/1024/1024:.1f} GB {_dl}"
             elif total_bytes >= 1024 * 1024:
-                size_str = f"  |  {total_bytes/1024/1024:.1f} MB indirildi"
+                size_str = f"  |  {total_bytes/1024/1024:.1f} MB {_dl}"
             else:
-                size_str = f"  |  {total_bytes/1024:.0f} KB indirildi"
+                size_str = f"  |  {total_bytes/1024:.0f} KB {_dl}"
 
         self._lbl_status.setText(
             f"{self._t('toplam')}: {total} {self._t('video')}  |  "
@@ -1511,13 +1553,15 @@ class MainWindow(QMainWindow):
         force_quit = getattr(self, "_force_quit", False)
         self._force_quit = False    # tek seferlik — iptal edilirse normal akışa dön
 
+        t = self._t
+
         # Tepsi aktifse gizle (tepsiden Çıkış hariç)
         tray = getattr(self, "_tray", None)
         if tray and tray.isVisible() and not force_quit:
             if active:
                 self.hide()
-                tray.notify("Arka Planda Çalışıyor",
-                            f"{len(active)} indirme arka planda devam ediyor.")
+                tray.notify(t("arka_planda"),
+                            t("arka_planda_govde", n=len(active)))
                 event.ignore()
                 return
             else:
@@ -1528,8 +1572,8 @@ class MainWindow(QMainWindow):
         if not active:
             # confirm_exit ayarı
             if self.settings.get("confirm_exit", True):
-                if self._confirm_dialog("Çıkış", "Uygulamadan çıkmak istediğinize emin misiniz?",
-                                        btn_ok="Evet, Çık", btn_cancel="Hayır, Çıkma"):
+                if self._confirm_dialog(t("cikis"), t("cikis_soru"),
+                                        btn_ok=t("evet_cik"), btn_cancel=t("hayir_cikma")):
                     self._persist_queue_on_exit()
                     event.accept()
                 else:
@@ -1545,15 +1589,12 @@ class MainWindow(QMainWindow):
             names.append("- " + title)
         names_text = "\n".join(names[:5])
         if len(active) > 5:
-            names_text += "\n... ve " + str(len(active) - 5) + " tane daha"
+            names_text += "\n" + t("ve_n_daha", n=len(active) - 5)
 
-        body = (f"{len(active)} indirme devam ediyor.\n"
-                f"Çıkarsanız indirmeler durdurulacak; bir sonraki açılışta\n"
-                f"kaldığı yerden devam ettirilebilecek.\n\n"
-                f"{names_text}")
+        body = t("cikis_aktif", n=len(active)) + f"\n\n{names_text}"
 
-        if self._confirm_dialog("Çıkış", body,
-                                btn_ok="Evet, Çık", btn_cancel="Hayır, Çıkma",
+        if self._confirm_dialog(t("cikis"), body,
+                                btn_ok=t("evet_cik"), btn_cancel=t("hayir_cikma"),
                                 danger=True):
             # Kuyruk diske yazılır; indirmeler İPTAL EDİLMEZ — .part dosyaları
             # kalır ki geri yüklemede kaldığı yerden devam edilebilsin.

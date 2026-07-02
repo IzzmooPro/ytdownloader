@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import QSystemTrayIcon, QMenu, QApplication
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QPolygonF
 from PyQt6.QtCore import Qt, QPointF
 from ytdownloader.config.constants import APP_VERSION
+from ytdownloader.services.i18n_service import get_i18n
 
 
 def _make_tray_icon(size: int = 64) -> QIcon:
@@ -52,20 +53,28 @@ class TrayIcon(QSystemTrayIcon):
             QMenu::separator { height: 1px; background: #2e3348; margin: 4px 8px; }
         """)
 
-        self._a_show = menu.addAction("Göster / Gizle")
+        self._a_show = menu.addAction("")
         self._a_show.triggered.connect(self._toggle_window)
 
         menu.addSeparator()
 
-        self._a_paste = menu.addAction("URL Yapıştır")
+        self._a_paste = menu.addAction("")
         self._a_paste.triggered.connect(self._paste_from_tray)
 
         menu.addSeparator()
 
-        self._a_quit = menu.addAction("Çıkış")
+        self._a_quit = menu.addAction("")
         self._a_quit.triggered.connect(self._quit)
 
         self.setContextMenu(menu)
+        self.retranslate()
+
+    def retranslate(self):
+        """Menü metinlerini aktif dile çevirir. Dil değişiminde çağrılır."""
+        t = get_i18n().t
+        self._a_show.setText(t("goster_gizle"))
+        self._a_paste.setText(t("url_yapistir_tray"))
+        self._a_quit.setText(t("cikis"))
 
     def _on_activated(self, reason):
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
@@ -74,12 +83,10 @@ class TrayIcon(QSystemTrayIcon):
     def _toggle_window(self):
         if self._win.isVisible():
             self._win.hide()
-            self._a_show.setText("Göster")
         else:
             self._win.show()
             self._win.raise_()
             self._win.activateWindow()
-            self._a_show.setText("Gizle")
 
     def _quit(self):
         """
@@ -105,7 +112,8 @@ class TrayIcon(QSystemTrayIcon):
                              QSystemTrayIcon.MessageIcon.Information, 3000)
 
     def update_tooltip(self, active: int, completed: int):
+        t = get_i18n().t
         self.setToolTip(
             f"YouTube İndirici v{APP_VERSION}\n"
-            f"İndiriliyor: {active}  |  Tamamlandı: {completed}"
+            f"{t('indiriliyor')}: {active}  |  {t('tamamlandi')}: {completed}"
         )

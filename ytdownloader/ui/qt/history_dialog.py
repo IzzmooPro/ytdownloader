@@ -25,9 +25,10 @@ class HistoryDialog(QDialog):
         self.settings_manager = settings_manager
         self._re_download_cb = re_download_cb
         self._i18n = get_i18n()
+        self._t = self._i18n.t
         self._all_entries: list[dict] = []
 
-        self.setWindowTitle("İndirme Geçmişi")
+        self.setWindowTitle(self._t("gecmis"))
         self.setMinimumSize(780, 500)
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint)
         self._build_ui()
@@ -42,7 +43,7 @@ class HistoryDialog(QDialog):
         top = QHBoxLayout()
 
         self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("Video adı veya kanal ara...")
+        self.search_box.setPlaceholderText(self._t("ara_placeholder"))
         self.search_box.setFixedHeight(34)
         self.search_box.textChanged.connect(self._apply_filter)
         top.addWidget(self.search_box, stretch=1)
@@ -50,11 +51,11 @@ class HistoryDialog(QDialog):
         self.cmb_format = QComboBox()
         self.cmb_format.setFixedHeight(34)
         self.cmb_format.setMinimumWidth(130)
-        self.cmb_format.addItems(["Tüm Formatlar", "MP3", "MP4"])
+        self.cmb_format.addItems([self._t("tum_formatlar"), "MP3", "MP4"])
         self.cmb_format.currentTextChanged.connect(self._apply_filter)
         top.addWidget(self.cmb_format)
 
-        btn_clear_hist = QPushButton("Geçmişi Temizle")
+        btn_clear_hist = QPushButton(self._t("gecmisi_temizle"))
         btn_clear_hist.setFixedHeight(34)
         _e = theme_manager.palette.error
         btn_clear_hist.setStyleSheet(f"""
@@ -72,7 +73,10 @@ class HistoryDialog(QDialog):
         # ── Tablo ────────────────────────────────────────────────────────
         self.table = QTableWidget()
         self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["Video", "Kanal", "Format", "Boyut", "Tarih"])
+        self.table.setHorizontalHeaderLabels([
+            "Video", self._t("kanal"), self._t("format"),
+            self._t("boyut"), self._t("tarih"),
+        ])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
@@ -98,13 +102,13 @@ class HistoryDialog(QDialog):
         bot.addWidget(self.lbl_count)
         bot.addStretch()
 
-        btn_open = QPushButton("Dosyayı Göster")
+        btn_open = QPushButton(self._t("dosyayi_goster"))
         btn_open.setFixedHeight(34)
-        btn_open.setToolTip("Seçili dosyayı klasörde göster")
+        btn_open.setToolTip(self._t("tt_klasorde_goster"))
         btn_open.clicked.connect(self._open_selected)
         bot.addWidget(btn_open)
 
-        btn_close = QPushButton("Kapat")
+        btn_close = QPushButton(self._t("kapat"))
         btn_close.setFixedHeight(34)
         btn_close.clicked.connect(self.accept)
         bot.addWidget(btn_close)
@@ -122,6 +126,8 @@ class HistoryDialog(QDialog):
     def _apply_filter(self):
         query  = self.search_box.text().lower()
         fmt    = self.cmb_format.currentText()
+        # index 0 = "Tüm Formatlar" (çevrilmiş olabilir) — metin yerine index'e bak
+        fmt_active = self.cmb_format.currentIndex() > 0
 
         filtered = []
         for e in self._all_entries:
@@ -131,7 +137,7 @@ class HistoryDialog(QDialog):
 
             if query and query not in title and query not in channel:
                 continue
-            if fmt != "Tüm Formatlar" and e_fmt != fmt:
+            if fmt_active and e_fmt != fmt:
                 continue
             filtered.append(e)
 
@@ -173,13 +179,13 @@ class HistoryDialog(QDialog):
         total = len(self._all_entries)
         shown = len(entries)
         if total == 0:
-            self.lbl_count.setText("Henüz indirme kaydı yok")
+            self.lbl_count.setText(self._t("henuz_kayit_yok"))
         elif shown == 0:
-            self.lbl_count.setText("Arama sonucu bulunamadı")
+            self.lbl_count.setText(self._t("sonuc_bulunamadi"))
         elif shown == total:
-            self.lbl_count.setText(f"{shown} indirme")
+            self.lbl_count.setText(self._t("n_indirme", n=shown))
         else:
-            self.lbl_count.setText(f"{shown} / {total} sonuç")
+            self.lbl_count.setText(self._t("n_sonuc", shown=shown, total=total))
 
     def _open_file_row(self, index):
         item = self.table.item(index.row(), 0)
@@ -199,8 +205,8 @@ class HistoryDialog(QDialog):
 
     def _open_path(self, path: str):
         if not path or not os.path.exists(path):
-            QMessageBox.warning(self, "Dosya Bulunamadı",
-                                f"Dosya artık mevcut değil:\n{path}")
+            QMessageBox.warning(self, self._t("dosya_bulunamadi"),
+                                f"{self._t('dosya_artik_yok')}\n{path}")
             return
         if sys.platform == "win32":
             subprocess.Popen(f'explorer /select,"{path}"')
@@ -224,17 +230,17 @@ class HistoryDialog(QDialog):
         menu = QMenu(self)
 
         if fpath and os.path.exists(fpath):
-            a = menu.addAction("Klasörde Göster")
+            a = menu.addAction(self._t("klasorde_goster"))
             a.triggered.connect(lambda: self._open_path(fpath))
         if url and self._re_download_cb:
-            a = menu.addAction("Yeniden İndir")
+            a = menu.addAction(self._t("yeniden_indir"))
             a.triggered.connect(lambda: (self.accept(), self._re_download_cb(url)))
         if url:
-            a = menu.addAction("URL'yi Kopyala")
+            a = menu.addAction(self._t("url_kopyala"))
             a.triggered.connect(lambda: QApplication.clipboard().setText(url))
         title_text = item.text()
         if title_text:
-            a = menu.addAction("Başlığı Kopyala")
+            a = menu.addAction(self._t("basligi_kopyala"))
             a.triggered.connect(lambda: QApplication.clipboard().setText(title_text))
 
         if not menu.isEmpty():
@@ -242,8 +248,8 @@ class HistoryDialog(QDialog):
 
     def _clear_history(self):
         reply = QMessageBox.question(
-            self, "Geçmişi Temizle",
-            "Tüm indirme geçmişi silinecek. Emin misiniz?",
+            self, self._t("gecmisi_temizle"),
+            self._t("gecmis_sil_soru"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -253,7 +259,7 @@ class HistoryDialog(QDialog):
                 self._all_entries.clear()
                 self._populate([])
             else:
-                QMessageBox.warning(self, "Hata", "Geçmiş temizlenemedi.")
+                QMessageBox.warning(self, self._t("hata"), self._t("gecmis_temizlenemedi"))
 
     @staticmethod
     def _fmt_size(b) -> str:
