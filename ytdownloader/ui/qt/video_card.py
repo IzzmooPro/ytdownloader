@@ -56,6 +56,12 @@ class ThumbnailLoader(QThread):
                 if data:
                     px = QPixmap()
                     if px.loadFromData(data):
+                        # 4:3 fallback thumbnail'larda (hqdefault/sddefault) üst-alt
+                        # siyah letterbox bantları olur — önce ortadaki 16:9 bölgeyi al
+                        w, h = px.width(), px.height()
+                        target_h = int(w * 9 / 16)
+                        if h > target_h + 4:
+                            px = px.copy(0, (h - target_h) // 2, w, target_h)
                         px = px.scaled(140, 94, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                                        Qt.TransformationMode.SmoothTransformation)
                         if px.width() > 140 or px.height() > 94:
@@ -293,6 +299,8 @@ class VideoCard(QFrame):
         pct_row.addStretch()
         self.lbl_badge = QLabel("")
         self.lbl_badge.setObjectName("badge_queued")
+        # Boşken gizle — pill stili boş etikette gri blob olarak görünüyordu
+        self.lbl_badge.setVisible(False)
         pct_row.addWidget(self.lbl_badge)
         ctrl_col.addLayout(pct_row)
 
@@ -309,8 +317,10 @@ class VideoCard(QFrame):
         ctrl_col.addStretch(1)
 
         # Buton satırı — hover'da görünür
+        # DİKKAT: seçicisiz setStyleSheet("background: transparent") KULLANMA —
+        # Qt'de seçicisiz kural tüm çocuklara da uygulanır ve indirme butonunun
+        # kırmızı arka planını ezerek onu görünmez yapıyordu.
         self._btn_bar = QWidget()
-        self._btn_bar.setStyleSheet("background: transparent;")
         btn_row = QHBoxLayout(self._btn_bar)
         btn_row.setSpacing(6)
         btn_row.setContentsMargins(0, 0, 0, 0)
@@ -330,6 +340,11 @@ class VideoCard(QFrame):
         self.btn_action.setToolTip(get_i18n().t("tt_indirmeyi_baslat"))
         self.btn_action.clicked.connect(self._on_action)
         set_icon(self.btn_action, "download", "#ffffff", 17)
+        # Kırmızı stili inline uygula — QSS cascade sürprizlerine karşı garanti
+        self.btn_action.setStyleSheet(
+            "QPushButton { background-color: #c0392b; border: none; border-radius: 8px; }"
+            "QPushButton:hover { background-color: #a93226; }"
+        )
         btn_row.addWidget(self.btn_action)
 
         self.btn_open_file = QPushButton()
@@ -410,6 +425,13 @@ class VideoCard(QFrame):
         """
         is_mix = (kind == "mix")
 
+        # Tema duyarlı renkler — açık temada koyu tonlar okunmuyordu
+        from ytdownloader.ui.qt.theme import theme_manager as _tm
+        _p = _tm.palette
+        _muted  = _p.text_muted
+        _sub    = _p.text_secondary
+        _border = _p.border
+
         t = get_i18n().t
         if is_mix:
             info_text = (
@@ -418,15 +440,15 @@ class VideoCard(QFrame):
                 else t("mix_ait")
             )
             btn_text  = t("mix_ac")
-            # Pasif — gri ton, hover kırmızıya gitmiyor
-            info_css  = "color: #4e5568; font-size: 11px;"
-            btn_css   = """
-                QPushButton {
-                    background: transparent; border: 1px solid #2e3348;
-                    border-radius: 5px; color: #4e5568;
+            # Pasif — soluk ton, hover kırmızıya gitmiyor
+            info_css  = f"color: {_muted}; font-size: 11px;"
+            btn_css   = f"""
+                QPushButton {{
+                    background: transparent; border: 1px solid {_border};
+                    border-radius: 5px; color: {_muted};
                     font-size: 11px; padding: 0 8px;
-                }
-                QPushButton:hover { border-color: #5a6080; color: #6b7280; }
+                }}
+                QPushButton:hover {{ border-color: {_sub}; color: {_sub}; }}
             """
         else:
             info_text = (
@@ -435,15 +457,14 @@ class VideoCard(QFrame):
                 else t("playlist_ait")
             )
             btn_text  = t("playlist_olarak_ac")
-            # Normal — mevcut stil
-            info_css  = "color: #6b7280; font-size: 11px;"
-            btn_css   = """
-                QPushButton {
-                    background: transparent; border: 1px solid #3d4460;
-                    border-radius: 5px; color: #6b7280;
+            info_css  = f"color: {_sub}; font-size: 11px;"
+            btn_css   = f"""
+                QPushButton {{
+                    background: transparent; border: 1px solid {_border};
+                    border-radius: 5px; color: {_sub};
                     font-size: 11px; padding: 0 8px;
-                }
-                QPushButton:hover { border-color: #c0392b; color: #c0392b; }
+                }}
+                QPushButton:hover {{ border-color: #c0392b; color: #c0392b; }}
             """
 
         self._lbl_playlist_info.setText(info_text)
@@ -1094,6 +1115,7 @@ class VideoCard(QFrame):
         badge = self._badge_text(state)
         self.lbl_badge.setObjectName(f"badge_{state}")
         self.lbl_badge.setText(badge)
+        self.lbl_badge.setVisible(bool(badge))
         self.lbl_badge.style().unpolish(self.lbl_badge)
         self.lbl_badge.style().polish(self.lbl_badge)
 

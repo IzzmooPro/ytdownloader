@@ -1,9 +1,9 @@
 ; YouTube İndirici — Inno Setup Script
 
 #define MyAppName "YouTube İndirici"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.2.0"
 #define MyAppPublisher "IzzmooPro"
-#define MyAppURL "IzzmooPro@gmail.com"
+#define MyAppURL "https://github.com/IzzmooPro/ytdownloader"
 #define MyAppExeName "YouTube Indirici.exe"
 #define MyAppIcon AddBackslash(SourcePath) + "icon.ico"
 #define MyAppExePath AddBackslash(SourcePath) + "dist\\YouTube Indirici.exe"
@@ -28,6 +28,9 @@ SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
 CloseApplicationsFilter=*.exe
+; Uygulamanın tek-instance mutex'i — kurulum sırasında uygulama açıksa
+; Inno kullanıcıya kibarca "kapatın" uyarısı gösterir (taskkill'e ek güvence)
+AppMutex=YTDownloader_SingleInstance_v1
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -43,6 +46,10 @@ Source: "{#MyAppExePath}"; DestDir: "{app}"; DestName: "{#MyAppExeName}"; Flags:
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
+[CustomMessages]
+english.RemoveUserData=Do you also want to delete settings, download history and the embedded FFmpeg?%n(%s)
+turkish.RemoveUserData=Ayarlar, indirme geçmişi ve gömülü FFmpeg de silinsin mi?%n(%s)
+
 [Code]
 function InitializeSetup(): Boolean;
 var
@@ -51,6 +58,24 @@ begin
   Exec('taskkill.exe', '/F /IM "{#MyAppExeName}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Sleep(1200);
   Result := True;
+end;
+
+// Kaldırma sonunda kullanıcı verisini SORARAK temizle — sessizce silme.
+// %APPDATA%\MyYouTubeDownloader: ayarlar, geçmiş, loglar, ffmpeg (~150 MB)
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  DataDir: String;
+begin
+  if CurUninstallStep = usPostUninstall then
+  begin
+    DataDir := ExpandConstant('{userappdata}\MyYouTubeDownloader');
+    if DirExists(DataDir) then
+    begin
+      if MsgBox(FmtMessage(CustomMessage('RemoveUserData'), [DataDir]),
+                mbConfirmation, MB_YESNO) = IDYES then
+        DelTree(DataDir, True, True, True);
+    end;
+  end;
 end;
 
 [Run]

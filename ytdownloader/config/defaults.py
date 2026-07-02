@@ -7,7 +7,9 @@ SettingsService bunu temel referans olarak kullanır.
 DEFAULT_SETTINGS: dict = {
     "version":                 1,
     "language":                "tr",
-    "theme":                   "dark",
+    # "auto" = Windows'un koyu/açık ayarını takip et. Kullanıcı temayı elle
+    # değiştirirse "dark"/"light" olarak kaydedilir ve artık o hatırlanır.
+    "theme":                   "auto",
 
     # İndirme
     "last_download_folder":    None,

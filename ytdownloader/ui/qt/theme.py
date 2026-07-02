@@ -223,13 +223,19 @@ QPushButton#btn_icon:hover {{
     color: {p.accent};
 }}
 QPushButton#btn_action {{
-    background-color: {p.accent};
+    background: qlineargradient(
+        x1:0, y1:0, x2:0, y2:1,
+        stop:0 {p.accent}, stop:1 {p.accent_hover}
+    );
     border: none;
     border-radius: 8px;
     padding: 3px 8px;
 }}
 QPushButton#btn_action:hover {{
-    background-color: {p.accent_hover};
+    background: {p.accent_hover};
+}}
+QPushButton#btn_action:pressed {{
+    background: {p.accent};
 }}
 QPushButton#btn_action:disabled {{
     background-color: {p.border};
@@ -402,6 +408,38 @@ QLabel {{
     background-color: transparent;
 }}
 
+/* ── MessageBox — tema uyumlu, okunabilir ───────────────────────────── */
+QMessageBox {{
+    background-color: {p.bg_elevated};
+}}
+QMessageBox QLabel {{
+    color: {p.text_primary};
+    background: transparent;
+    font-size: 13px;
+}}
+QMessageBox QPushButton {{
+    min-width: 84px;
+    min-height: 30px;
+    padding: 5px 18px;
+    border-radius: 7px;
+    background-color: {p.bg_surface};
+    border: 1px solid {p.border};
+    color: {p.text_primary};
+}}
+QMessageBox QPushButton:hover {{
+    background-color: {p.bg_hover};
+    border-color: {p.accent};
+}}
+QMessageBox QPushButton:default {{
+    background-color: {p.accent};
+    border: none;
+    color: #ffffff;
+    font-weight: 600;
+}}
+QMessageBox QPushButton:default:hover {{
+    background-color: {p.accent_hover};
+}}
+
 /* ── Tooltip ────────────────────────────────────────────────────────── */
 QToolTip {{
     background-color: {p.bg_elevated};
@@ -566,6 +604,24 @@ QLabel#empty_hint {{
 """
 
 
+def detect_system_theme() -> str:
+    """
+    Windows'un uygulama temasını (koyu/açık) okur. Ayarlarda "auto" seçiliyken
+    kullanılır. Okunamazsa "dark" döner.
+    """
+    try:
+        import winreg
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+        )
+        value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
+        winreg.CloseKey(key)
+        return "light" if value == 1 else "dark"
+    except Exception:
+        return "dark"
+
+
 class ThemeManager:
     """Uygulama genelinde tema yönetimi."""
 
@@ -589,6 +645,8 @@ class ThemeManager:
         return self._current
 
     def set_theme(self, name: str) -> None:
+        if name == "auto":
+            name = detect_system_theme()
         if name in self._palettes:
             self._current = name
 

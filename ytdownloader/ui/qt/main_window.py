@@ -330,8 +330,9 @@ class MainWindow(QMainWindow):
         ev.addSpacing(4)
 
         # Kısayol ipuçları
+        # (seçicisiz "background: transparent" verme — çocuk çiplerin
+        #  arka planını da ezer; QWidget zaten global QSS'te şeffaf)
         _hints = QWidget()
-        _hints.setStyleSheet("background: transparent;")
         hl = QHBoxLayout(_hints)
         hl.setSpacing(8)
         hl.setContentsMargins(0, 0, 0, 0)
@@ -427,15 +428,6 @@ class MainWindow(QMainWindow):
         self._m_tools.addAction(self._a_settings)
 
         self._m_tools.addSeparator()
-
-        # yt-dlp güncelleme — indirme MOTORUNU tazeler (uygulama güncellemesinden
-        # ayrı bir şey). EXE'de motor gömülü olduğundan pip ile güncellenemez;
-        # kafa karışıklığı olmasın diye menüde yalnızca kaynak kurulumda görünür.
-        import sys as _sys
-        self._a_update_ytdlp = QAction(self)
-        self._a_update_ytdlp.triggered.connect(self._update_ytdlp)
-        self._a_update_ytdlp.setVisible(not getattr(_sys, "frozen", False))
-        self._m_tools.addAction(self._a_update_ytdlp)
 
         self._a_history = QAction(self)
         self._a_history.triggered.connect(self._open_history)
@@ -658,7 +650,6 @@ class MainWindow(QMainWindow):
         self._a_quit.setText(t("cikis"))
         self._a_settings.setText(t("ayarlar"))
         self._a_history.setText(t("gecmis"))
-        self._a_update_ytdlp.setText("⬆  " + t("ytdlp_guncelle"))
         self._a_kullanim.setText(t("kullanim"))
         self._a_about.setText(t("hakkinda"))
 
@@ -1229,69 +1220,6 @@ class MainWindow(QMainWindow):
                 f"{changed} kart {fmt} olarak ayarlandı",
                 "info"
             )
-
-    def _update_ytdlp(self):
-        """
-        yt-dlp'yi günceller.
-
-        EXE (frozen): yt-dlp uygulamanın içine gömülüdür, pip ile güncellenemez —
-        kullanıcı uygulama güncellemesine yönlendirilir.
-        Kaynak koddan: pip ile arka planda güncellenir, sonuç bildirimle gösterilir.
-        """
-        import sys
-        if getattr(sys, "frozen", False):
-            QMessageBox.information(
-                self, "yt-dlp Güncelleme",
-                "yt-dlp bu sürümde uygulamayla birlikte gelir.\n"
-                "İndirme sorunları yaşıyorsanız uygulamanın yeni sürümünü kontrol edin."
-            )
-            self._update_service.check(self, show_no_update=True)
-            return
-
-        if getattr(self, "_ytdlp_update_running", False):
-            return
-        self._ytdlp_update_running = True
-        self.notification_center.show("⬆ yt-dlp", "Güncelleme başlatıldı...", "info")
-
-        import threading, subprocess
-        from PyQt6.QtCore import QTimer
-
-        result = {}
-
-        def _worker():
-            try:
-                proc = subprocess.run(
-                    [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"],
-                    capture_output=True, text=True, timeout=300,
-                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                )
-                result["ok"]  = proc.returncode == 0
-                result["msg"] = (proc.stdout or proc.stderr or "")[-400:]
-            except Exception as e:
-                result["ok"], result["msg"] = False, str(e)
-
-        th = threading.Thread(target=_worker, daemon=True)
-        th.start()
-
-        def _poll():
-            if th.is_alive():
-                QTimer.singleShot(500, _poll)
-                return
-            self._ytdlp_update_running = False
-            if result.get("ok"):
-                already = "already satisfied" in result.get("msg", "").lower()
-                self.notification_center.show(
-                    "✅ yt-dlp",
-                    "Zaten güncel." if already else
-                    "Güncellendi. Değişikliğin etkili olması için uygulamayı yeniden başlatın.",
-                    "success"
-                )
-            else:
-                self.notification_center.show(
-                    "❌ yt-dlp", f"Güncelleme başarısız: {result.get('msg', '?')[:120]}", "error"
-                )
-
-        QTimer.singleShot(500, _poll)
 
     def _open_history(self):
         from ytdownloader.ui.qt.history_dialog import HistoryDialog

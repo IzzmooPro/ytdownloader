@@ -133,7 +133,9 @@ def main():
     settings = settings_manager.load()
 
     _step(2, 0.05)
-    saved_theme = settings.get("theme", "dark")
+    # "auto" → Windows koyu/açık ayarını takip eder (ThemeManager çözümler).
+    # Kullanıcı elle tema seçtiyse ("dark"/"light") o tercih aynen uygulanır.
+    saved_theme = settings.get("theme", "auto")
     theme_manager.set_theme(saved_theme)
     app.setStyleSheet(theme_manager.stylesheet())
     log.info(f"Tema: {theme_manager.current}")
