@@ -63,7 +63,7 @@ class TrayIcon(QSystemTrayIcon):
         menu.addSeparator()
 
         self._a_quit = menu.addAction("Çıkış")
-        self._a_quit.triggered.connect(QApplication.quit)
+        self._a_quit.triggered.connect(self._quit)
 
         self.setContextMenu(menu)
 
@@ -80,6 +80,17 @@ class TrayIcon(QSystemTrayIcon):
             self._win.raise_()
             self._win.activateWindow()
             self._a_show.setText("Gizle")
+
+    def _quit(self):
+        """
+        Kontrollü çıkış: pencereden kapatmayla aynı onay akışı çalışsın.
+        QApplication.quit doğrudan çağrılırsa closeEvent atlanır — aktif
+        indirme varken sormadan kapanırdı.
+        """
+        if hasattr(self._win, "quit_from_tray"):
+            self._win.quit_from_tray()
+        else:
+            QApplication.quit()
 
     def _paste_from_tray(self):
         self._win.show()

@@ -107,9 +107,9 @@ class DownloadEngine:
             self._cancel_events[item.id] = cancel_ev
 
         log.info(f"[{item.id}] İndirme başlatıldı: {item.url}")
-        # FSM: PENDING → QUEUED → ACTIVE
+        # FSM: PENDING → QUEUED. ACTIVE geçişi worker başladığında yapılır —
+        # executor kuyruğunda bekleyenler QUEUED kalır, UI yanıltıcı "indiriliyor" göstermez.
         self._sm.transition(item.id, DownloadState.QUEUED)
-        self._sm.transition(item.id, DownloadState.ACTIVE)
         self._executor.submit(self._worker, item, pause_ev, cancel_ev)
 
     def pause(self, download_id: str) -> bool:
@@ -181,7 +181,8 @@ class DownloadEngine:
 
         try:
             self._sm.transition(download_id, DownloadState.CANCELLED)
-        except StateError as e:
+        except (StateError, KeyError) as e:
+            # KeyError: indirme bu arada tamamlanıp kayıttan silinmiş olabilir
             log.warning(f"[{download_id}] cancel geçiş hatası: {e}")
 
         log.info(f"[{download_id}] İptal edildi")
@@ -194,7 +195,18 @@ class DownloadEngine:
             self._cancel_events.pop(download_id, None)
 
     def shutdown(self) -> None:
-        """Tüm worker thread'leri durdurur."""
+        """
+        Tüm worker thread'leri durdurur.
+
+        Duraklatılmış indirmeler pause_ev.wait()'te bloklu bekler; ThreadPoolExecutor
+        thread'leri daemon olmadığı için önce cancel+pause event'leri set edilerek
+        uyandırılmalı — aksi halde uygulama çıkışta sonsuza kadar takılır.
+        """
+        with self._lock:
+            for ev in self._cancel_events.values():
+                ev.set()
+            for ev in self._pause_events.values():
+                ev.set()
         self._executor.shutdown(wait=False, cancel_futures=True)
 
     # ── Worker (arka plan thread) ─────────────────────────────────────────────
@@ -204,6 +216,14 @@ class DownloadEngine:
                 cancel_ev: threading.Event) -> None:
         """Her indirme için ayrı thread'de çalışır."""
         try:
+            # QUEUED → ACTIVE: worker gerçekten başladı.
+            # Kuyruktayken pause istendiyse durum PAUSING'dir — dokunma,
+            # progress hook ilk çağrıda bloklanıp PAUSED'a geçirecek.
+            if self._sm.get_state(item.id) == DownloadState.QUEUED:
+                try:
+                    self._sm.transition(item.id, DownloadState.ACTIVE)
+                except StateError:
+                    pass
             def on_retry(attempt_no: int, wait: float, error: str):
                 # Retry öncesi: ACTIVE → RETRYING
                 log.warning(f"[{item.id}] Retry {attempt_no}: {wait:.1f}s bekleniyor")
@@ -239,6 +259,8 @@ class DownloadEngine:
             self._sm.set_error(item.id, str(e))
         finally:
             self.cleanup(item.id)
+            # Worker bitti — kayıt artık gerekmiyor; StateManager'da birikmesin.
+            self._sm.unregister(item.id)
 
     def _perform_download(self, item: DownloadItem,
                           pause_ev: threading.Event,
@@ -406,7 +428,10 @@ class DownloadEngine:
             "http_headers":          DEFAULT_HTTP_HEADERS,
             "continuedl":            True,   # kaldığı yerden devam
             "progress_hooks":        [self._make_progress_hook(item.id, pause_ev, cancel_ev)],
-            "outtmpl":               str(Path(item.output_dir) / "%(title)s.%(ext)s"),
+            # [%(id)s] eki: aynı başlıklı farklı videoların birbirinin .part
+            # dosyasına devam etmesini / üzerine yazmasını önler.
+            "outtmpl":               str(Path(item.output_dir) / "%(title)s [%(id)s].%(ext)s"),
+            "windowsfilenames":      True,   # Windows'ta yasak karakterleri güvenli temizle
         }
 
         # Cookie auth (tarayıcıdan veya cookie dosyasından)

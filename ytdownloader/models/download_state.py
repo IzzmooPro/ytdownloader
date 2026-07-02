@@ -30,11 +30,13 @@ class DownloadState(Enum):
 VALID_TRANSITIONS: dict[DownloadState, FrozenSet[DownloadState]] = {
     DownloadState.PENDING:   frozenset({DownloadState.FETCHING,  DownloadState.QUEUED,    DownloadState.CANCELLED}),
     DownloadState.FETCHING:  frozenset({DownloadState.QUEUED,    DownloadState.ERROR,     DownloadState.CANCELLED}),
-    DownloadState.QUEUED:    frozenset({DownloadState.ACTIVE,    DownloadState.CANCELLED}),
+    DownloadState.QUEUED:    frozenset({DownloadState.ACTIVE,    DownloadState.PAUSING,   DownloadState.ERROR,
+                                        DownloadState.CANCELLED}),
     DownloadState.ACTIVE:    frozenset({DownloadState.PAUSING,   DownloadState.MERGING,   DownloadState.COMPLETED,
                                         DownloadState.ERROR,     DownloadState.CANCELLED, DownloadState.RETRYING}),
-    DownloadState.PAUSING:   frozenset({DownloadState.PAUSED,    DownloadState.ACTIVE,    DownloadState.CANCELLED}),
-    DownloadState.PAUSED:    frozenset({DownloadState.ACTIVE,    DownloadState.CANCELLED}),
+    DownloadState.PAUSING:   frozenset({DownloadState.PAUSED,    DownloadState.ACTIVE,    DownloadState.ERROR,
+                                        DownloadState.CANCELLED}),
+    DownloadState.PAUSED:    frozenset({DownloadState.ACTIVE,    DownloadState.ERROR,     DownloadState.CANCELLED}),
     DownloadState.MERGING:   frozenset({DownloadState.COMPLETED, DownloadState.ERROR}),
     DownloadState.COMPLETED: frozenset(),   # terminal
     DownloadState.CANCELLED: frozenset(),   # terminal

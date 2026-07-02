@@ -90,6 +90,7 @@ class VideoCard(QFrame):
     # Durum → accent rengi
     STATE_COLORS = {
         "idle":        "#c0392b",
+        "queued":      "#6b7280",
         "downloading": "#c0392b",
         "paused":      "#fd7e14",
         "retrying":    "#fd7e14",
@@ -100,6 +101,7 @@ class VideoCard(QFrame):
     # Durum → rozet metni
     STATE_BADGES = {
         "idle":        "",
+        "queued":      "⏳ Kuyrukta",
         "downloading": "⬇ İndiriliyor",
         "paused":      "⏸ Duraklatıldı",
         "retrying":    "↺ Yeniden Deneniyor",
@@ -713,12 +715,14 @@ class VideoCard(QFrame):
     def _on_action(self):
         if self.download_state == "idle":
             self._start()
-        elif self.download_state == "downloading":
+        elif self.download_state in ("downloading", "queued"):
             self._pause()
         elif self.download_state == "paused":
             self._resume()
         elif self.download_state in ("completed", "error"):
+            # Yeniden indir: sıfırla ve hemen başlat — klasör zaten seçili
             self._reset()
+            self._start()
 
     def _start(self):
         # Her indirme başında ayarları tazele (klasör değişmiş olabilir)
@@ -764,19 +768,20 @@ class VideoCard(QFrame):
             "speed_limit":   speed_limit,
         }
 
-        self._set_state("downloading")
+        # Kuyrukta başlar — ilk progress geldiğinde "downloading" olur
+        self._set_state("queued")
         self.download_manager.download_video(
             self.download_id, self.url, options,
             self._on_progress, self._on_completed
         )
 
     def _pause(self):
-        self.download_manager.pause_download(self.download_id)
-        self._set_state("paused")
+        if self.download_manager.pause_download(self.download_id):
+            self._set_state("paused")
 
     def _resume(self):
-        self.download_manager.resume_download(self.download_id)
-        self._set_state("downloading")
+        if self.download_manager.resume_download(self.download_id):
+            self._set_state("downloading")
 
     def _reset(self):
         """Hata sonrası veya tamamlanma sonrası sıfırla."""
@@ -845,7 +850,7 @@ class VideoCard(QFrame):
         if state == "idle":
             a = menu.addAction("İndir")
             a.triggered.connect(self._on_action)
-        elif state == "downloading":
+        elif state in ("downloading", "queued"):
             a = menu.addAction("Duraklat")
             a.triggered.connect(self._on_action)
         elif state == "paused":
@@ -939,7 +944,9 @@ class VideoCard(QFrame):
             self.settings_manager.save(self.settings)
 
     def _on_remove(self):
-        if self.download_state == "downloading":
+        # paused: worker thread pause_ev.wait()'te bloklu — cancel ile uyandırılmalı,
+        # yoksa executor slotu sonsuza kadar dolu kalır.
+        if self.download_state in ("downloading", "queued", "paused"):
             self.download_manager.cancel_download(self.download_id)
         self.remove_requested.emit(self.download_id)
 
@@ -953,6 +960,10 @@ class VideoCard(QFrame):
         """Ana thread'de çalışır."""
         status = info.get("status", "")
         if status == "downloading":
+            # Kuyruktan çıktı — gerçek indirme başladı
+            if self.download_state == "queued":
+                self._set_state("downloading")
+
             pct   = info.get("percent", 0)
             speed = info.get("speed", 0)
             eta   = info.get("eta", 0)
@@ -960,21 +971,9 @@ class VideoCard(QFrame):
             self.progress_bar.setValue(int(pct))
             self.lbl_pct.setText(f"%{pct:.0f}")
 
-            # %100'e ulaşınca hemen bildirim — FFmpeg'i bekleme
-            if pct >= 100 and not getattr(self, "_toast_sent", False):
-                self._toast_sent = True
-                self.notification_center.show(
-                    "✅ İndirme Tamamlandı",
-                    self.full_title,
-                    "success"
-                )
-                # Sistem sesini çal
-                try:
-                    import sys, ctypes
-                    if sys.platform == "win32":
-                        ctypes.windll.winmm.PlaySoundW("SystemAsterisk", None, 0x00010001)
-                except Exception:
-                    pass
+            # NOT: "Tamamlandı" bildirimi _apply_completed'da verilir.
+            # Burada %100 kontrolüyle vermek yanıltıcıydı: MP4'te video akışı
+            # %100 olsa da ses + birleştirme devam eder, hata da çıkabilir.
 
             if speed:
                 spd_str = self._fmt_size(speed) + "/s"
@@ -997,7 +996,6 @@ class VideoCard(QFrame):
 
     def _apply_completed(self, success: bool, result):
         """Ana thread'de çalışır."""
-        self._toast_sent = False  # sonraki indirme için sıfırla
         if success:
             self.progress_bar.setValue(100)
             self.lbl_pct.setText("%100")
@@ -1007,6 +1005,14 @@ class VideoCard(QFrame):
             if isinstance(result, dict):
                 self._final_file = result.get("file_path", "")
             self._set_state("completed")
+            if self.settings.get("notify_complete", True):
+                self.notification_center.show(
+                    "✅ İndirme Tamamlandı",
+                    self.full_title,
+                    "success"
+                )
+            if self.settings.get("sound_enabled", True):
+                play_complete()
             # Klasör otomatik açma
             if self.settings.get("open_folder_on_complete", False):
                 if isinstance(result, dict):
@@ -1028,11 +1034,14 @@ class VideoCard(QFrame):
             self.lbl_error.setText(short_err)
             self.lbl_error.setToolTip(full_err)
             self.lbl_error.setVisible(True)
-            self.notification_center.show(
-                "❌ İndirme Hatası",
-                self.full_title,
-                "error"
-            )
+            if self.settings.get("notify_error", True):
+                self.notification_center.show(
+                    "❌ İndirme Hatası",
+                    self.full_title,
+                    "error"
+                )
+            if self.settings.get("sound_enabled", True):
+                play_error()
 
     # ── Durum Yönetimi ────────────────────────────────────────────────────────
 
@@ -1084,6 +1093,7 @@ class VideoCard(QFrame):
         self.progress_bar.style().polish(self.progress_bar)
         action_icons = {
             "idle":        "download",
+            "queued":      "pause",
             "downloading": "pause",
             "paused":      "play",
             "completed":   "retry",
@@ -1105,6 +1115,16 @@ class VideoCard(QFrame):
             self.btn_action.setFixedSize(32, 32)
             self.btn_open_file.setFixedSize(32, 32)
             self.btn_copy_path.setFixedSize(32, 32)
+            # İndirme sırasında atanan kırmızı inline stili soluk stille değiştir —
+            # temizlenmezse buton tamamlanan kartta kırmızı kalıyor.
+            from ytdownloader.ui.qt.theme import theme_manager as _tm2
+            _done_dark = _tm2.current == "dark"
+            _done_brd  = "#3d4460" if _done_dark else "#b8bfc8"
+            _done_hov  = "#2e3348" if _done_dark else "#e8ecf4"
+            self.btn_action.setStyleSheet(
+                f"QPushButton {{ background-color: transparent; border: 1.5px solid {_done_brd}; border-radius: 8px; }}"
+                f"QPushButton:hover {{ background-color: {_done_hov}; }}"
+            )
             set_icon(self.btn_action, "retry", "#6b7280", 14)
             set_icon(self.btn_open_file, "folder", "#6b7280", 14)
             set_icon(self.btn_copy_path, "paste", "#6b7280", 14)

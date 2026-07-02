@@ -11,10 +11,11 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
     QLineEdit, QComboBox, QMessageBox, QAbstractItemView, QMenu, QApplication,
 )
-from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QColor, QFont, QIcon
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QFont
 
 from ytdownloader.services.i18n_service import get_i18n
+from ytdownloader.ui.qt.theme import theme_manager
 
 
 class HistoryDialog(QDialog):
@@ -43,31 +44,25 @@ class HistoryDialog(QDialog):
         self.search_box = QLineEdit()
         self.search_box.setPlaceholderText("Video adı veya kanal ara...")
         self.search_box.setFixedHeight(34)
-        self.search_box.setStyleSheet("""
-            QLineEdit {
-                background: #1a1d27; border: 1px solid #2e3348;
-                border-radius: 7px; padding: 0 12px;
-                color: #e8eaf0; font-size: 13px;
-            }
-            QLineEdit:focus { border-color: #c0392b; }
-        """)
         self.search_box.textChanged.connect(self._apply_filter)
         top.addWidget(self.search_box, stretch=1)
 
         self.cmb_format = QComboBox()
-        self.cmb_format.setFixedSize(110, 34)
+        self.cmb_format.setFixedHeight(34)
+        self.cmb_format.setMinimumWidth(130)
         self.cmb_format.addItems(["Tüm Formatlar", "MP3", "MP4"])
         self.cmb_format.currentTextChanged.connect(self._apply_filter)
         top.addWidget(self.cmb_format)
 
         btn_clear_hist = QPushButton("Geçmişi Temizle")
         btn_clear_hist.setFixedHeight(34)
-        btn_clear_hist.setStyleSheet("""
-            QPushButton {
-                background: transparent; border: 1px solid #3d1a1a;
-                border-radius: 7px; color: #e05a5a; font-size: 12px; padding: 0 12px;
-            }
-            QPushButton:hover { background: #3d1a1a; }
+        _e = theme_manager.palette.error
+        btn_clear_hist.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent; border: 1px solid {_e};
+                border-radius: 7px; color: {_e}; font-size: 12px; padding: 0 12px;
+            }}
+            QPushButton:hover {{ background: rgba(220, 53, 69, 0.15); }}
         """)
         btn_clear_hist.clicked.connect(self._clear_history)
         top.addWidget(btn_clear_hist)
@@ -90,21 +85,6 @@ class HistoryDialog(QDialog):
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(False)
         self.table.setShowGrid(False)
-        self.table.setStyleSheet("""
-            QTableWidget {
-                background: #12141f; border: 1px solid #2e3348;
-                border-radius: 8px; gridline-color: transparent;
-                selection-background-color: #272c40;
-            }
-            QTableWidget::item { padding: 8px 10px; color: #e8eaf0; }
-            QTableWidget::item:alternate { background: #161926; }
-            QHeaderView::section {
-                background: #1a1d27; color: #6b7280;
-                font-size: 11px; font-weight: 700;
-                letter-spacing: 0.8px; padding: 8px 10px;
-                border: none; border-bottom: 1px solid #2e3348;
-            }
-        """)
         self.table.doubleClicked.connect(self._open_file_row)
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._show_row_menu)
@@ -114,7 +94,7 @@ class HistoryDialog(QDialog):
         bot = QHBoxLayout()
 
         self.lbl_count = QLabel()
-        self.lbl_count.setStyleSheet("color: #6b7280; font-size: 12px;")
+        self.lbl_count.setStyleSheet(f"color: {theme_manager.palette.text_muted}; font-size: 12px;")
         bot.addWidget(self.lbl_count)
         bot.addStretch()
 
@@ -217,10 +197,9 @@ class HistoryDialog(QDialog):
         if path:
             self._open_path(path)
 
-    @staticmethod
-    def _open_path(path: str):
+    def _open_path(self, path: str):
         if not path or not os.path.exists(path):
-            QMessageBox.warning(None, "Dosya Bulunamadı",
+            QMessageBox.warning(self, "Dosya Bulunamadı",
                                 f"Dosya artık mevcut değil:\n{path}")
             return
         if sys.platform == "win32":
@@ -243,12 +222,6 @@ class HistoryDialog(QDialog):
         url   = item.data(Qt.ItemDataRole.UserRole + 1) or ""
 
         menu = QMenu(self)
-        menu.setStyleSheet("""
-            QMenu { background: #1a1d27; border: 1px solid #2e3348;
-                    border-radius: 10px; padding: 5px 4px; font-size: 13px; }
-            QMenu::item { padding: 7px 18px 7px 12px; color: #e8eaf0; border-radius: 5px; margin: 1px 4px; }
-            QMenu::item:selected { background: #2e3348; }
-        """)
 
         if fpath and os.path.exists(fpath):
             a = menu.addAction("Klasörde Göster")
@@ -275,14 +248,12 @@ class HistoryDialog(QDialog):
             QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
-            try:
-                import json
-                with open(self.settings_manager.history_file, "w", encoding="utf-8") as f:
-                    json.dump([], f)
+            ok = self.settings_manager.clear_history()
+            if ok:
                 self._all_entries.clear()
                 self._populate([])
-            except Exception as e:
-                QMessageBox.warning(self, "Hata", str(e))
+            else:
+                QMessageBox.warning(self, "Hata", "Geçmiş temizlenemedi.")
 
     @staticmethod
     def _fmt_size(b) -> str:

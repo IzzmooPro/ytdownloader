@@ -156,6 +156,24 @@ class SettingsService:
         with self._history_lock:
             return self._load_history_unlocked()
 
+    def clear_history(self) -> bool:
+        """İndirme geçmişini temizler. Thread-safe, atomic write."""
+        with self._history_lock:
+            tmp_file = self.history_file.with_suffix(".json.tmp")
+            try:
+                with tmp_file.open("w", encoding="utf-8") as f:
+                    json.dump([], f)
+                os.replace(tmp_file, self.history_file)
+                return True
+            except Exception as e:
+                log.warning(f"Geçmiş temizlenemedi: {e}")
+                try:
+                    if tmp_file.exists():
+                        tmp_file.unlink()
+                except Exception:
+                    pass
+                return False
+
     def _load_history_unlocked(self) -> list[dict]:
         """Lock alınmış bağlamda çağrılır — doğrudan kullanma."""
         try:

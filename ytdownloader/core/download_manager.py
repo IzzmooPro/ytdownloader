@@ -335,5 +335,23 @@ class DownloadManager:
 
     def cancel_download(self, download_id: str) -> bool:
         log.info(f"[{download_id}] Cancel isteği")
+        # Sıralı kuyrukta henüz başlamamışsa oradan çıkar — yoksa sırası
+        # gelince silinmiş kartın callback'i çağrılır (use-after-free riski).
+        with self._seq_lock:
+            before = len(self._seq_queue)
+            self._seq_queue = [it for it in self._seq_queue if it[0] != download_id]
+            removed_from_queue = len(self._seq_queue) != before
+        if removed_from_queue:
+            return True
         return bool(self._engine.cancel(download_id))
+
+    def shutdown(self) -> None:
+        """
+        Uygulama kapanırken çağrılır. Bekleyen kuyruk temizlenir, bloklu
+        (duraklatılmış) worker'lar uyandırılıp durdurulur — çıkışta takılma olmaz.
+        """
+        with self._seq_lock:
+            self._seq_queue.clear()
+            self._seq_active = False
+        self._engine.shutdown()
 

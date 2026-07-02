@@ -26,6 +26,12 @@ def setup_logger(log_dir: Path, level: int = logging.DEBUG) -> logging.Logger:
     logger.setLevel(level)
 
     # ── Konsol handler ────────────────────────────────────────────────────
+    # Windows konsolu cp1254 olabilir; '→' gibi karakterler UnicodeEncodeError
+    # gürültüsü üretir. Mümkünse stream'i UTF-8'e çevir, olmazsa '?' ile geç.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
     console = logging.StreamHandler(sys.stdout)
     console.setLevel(logging.DEBUG)
     console.setFormatter(_ColorFormatter())

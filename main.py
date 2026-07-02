@@ -179,6 +179,13 @@ def main():
 
     exit_code = app.exec()
 
+    # Worker thread'leri durdur — duraklatılmış (bloklu) indirme varsa
+    # uyandırılmadan çıkılırsa non-daemon executor thread'leri kapanışı asar.
+    try:
+        download_manager.shutdown()
+    except Exception:
+        pass
+
     # Toast service'i temizle
     try:
         from ytdownloader.services.toast_service import shutdown as toast_shutdown

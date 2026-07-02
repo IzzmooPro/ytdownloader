@@ -86,6 +86,8 @@ class MainWindow(QMainWindow):
         self._build_menu()
         self._apply_theme()
         self._start_status_timer()
+        if self.settings.get("minimize_to_tray", True):
+            self._setup_tray()
         self.setMinimumSize(900, 600)
         self.resize(1000, 700)
         self._set_window_icon()
@@ -261,8 +263,8 @@ class MainWindow(QMainWindow):
         hl.setSpacing(8)
         hl.setContentsMargins(0, 0, 0, 0)
         hl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        for icon, text in [("⌨", "Ctrl+V  Yapıştır"), ("⬇", "Ctrl+D  Hepsini İndir"), ("📋", "Playlist desteği")]:
-            chip = QLabel(f"{icon}  {text}")
+        for text in ["Ctrl+V  Yapıştır", "Ctrl+D  Hepsini İndir", "Playlist desteği"]:
+            chip = QLabel(text)
             chip.setObjectName("empty_hint")
             hl.addWidget(chip)
         ev.addWidget(_hints)
@@ -642,6 +644,20 @@ class MainWindow(QMainWindow):
 
     # ── URL İşlemleri ────────────────────────────────────────────────────────
 
+    def _find_card(self, url: str):
+        """
+        URL'ye karşılık gelen kartı döner. Aynı video farklı URL biçimleriyle
+        (youtu.be/X vs watch?v=X) eklenmesin diye video ID üzerinden karşılaştırır.
+        """
+        from ytdownloader.utils.url_utils import extract_video_id
+        vid = extract_video_id(url)
+        for c in self.cards:
+            if c.url == url:
+                return c
+            if vid and extract_video_id(c.url) == vid:
+                return c
+        return None
+
     def paste_url(self):
         text = QApplication.clipboard().text().strip()
         if not text:
@@ -652,13 +668,17 @@ class MainWindow(QMainWindow):
             valid, _ = validate_youtube_url(url)
             if not valid:
                 continue
-            if any(c.url == url for c in self.cards):
+            if self._find_card(url):
                 continue
             self._add_card(url)
             added += 1
         if added == 0:
             self.notification_center.show(
                 self._t("gecersiz_url"), self._t("pano_url_yok"), "warning"
+            )
+        else:
+            self.notification_center.show(
+                self._t("liste_yuklendi"), self._t("url_eklendi", n=added), "success"
             )
 
     def _is_playlist_url(self, url: str) -> bool:
@@ -671,7 +691,7 @@ class MainWindow(QMainWindow):
         dlg = PlaylistDialog(self, url, self.download_manager)
         if dlg.exec() and dlg.selected_urls:
             for u in dlg.selected_urls:
-                if not any(c.url == u for c in self.cards):
+                if not self._find_card(u):
                     self._add_card(u,
                                    preset_format=dlg.selected_format,
                                    preset_quality=dlg.selected_quality)
@@ -683,7 +703,7 @@ class MainWindow(QMainWindow):
 
     def _add_card(self, url: str, preset_format: str = None, preset_quality: str = None):
         # Duplicate guard — çağıran tarafta da kontrol edilmeli ama burada kesin son hat.
-        existing = next((c for c in self.cards if c.url == url), None)
+        existing = self._find_card(url)
         if existing:
             self._scroll_to_card(existing)
             return
@@ -964,8 +984,21 @@ class MainWindow(QMainWindow):
         )
 
     def clear_list(self):
+        if not self.cards:
+            return
+        active_n = sum(1 for c in self.cards
+                       if c.download_state in ("downloading", "queued", "paused"))
+        if active_n:
+            msg = (f"{active_n} indirme devam ediyor ve iptal edilecek.\n"
+                   f"Listedeki {len(self.cards)} kartın tümü kaldırılacak.")
+        else:
+            msg = f"Listedeki {len(self.cards)} kartın tümü kaldırılacak."
+        if not self._confirm_dialog("Listeyi Temizle", msg,
+                                    btn_ok="Evet, Temizle", btn_cancel="Vazgeç",
+                                    danger=active_n > 0):
+            return
         for card in self.cards[:]:
-            if card.download_state == "downloading":
+            if card.download_state in ("downloading", "queued", "paused"):
                 self.download_manager.cancel_download(card.download_id)
             card.setParent(None)
             card.deleteLater()
@@ -989,7 +1022,7 @@ class MainWindow(QMainWindow):
         added = 0
         for url in lines:
             valid, _ = validate_youtube_url(url)
-            if not valid or any(c.url == url for c in self.cards):
+            if not valid or self._find_card(url):
                 continue
             self._add_card(url)
             added += 1
@@ -1044,7 +1077,7 @@ class MainWindow(QMainWindow):
 
     def _on_youtube_video_detected(self, url: str):
         """YouTube sekmesinden gelen video URL'sini ekle ve sekmeyi değiştir."""
-        existing = next((c for c in self.cards if c.url == url), None)
+        existing = self._find_card(url)
         if existing:
             self._tabs.setCurrentIndex(0)
             self._scroll_to_card(existing)
@@ -1096,7 +1129,7 @@ class MainWindow(QMainWindow):
         def _re_download(url: str):
             if not url:
                 return
-            existing = next((c for c in self.cards if c.url == url), None)
+            existing = self._find_card(url)
             self._tabs.setCurrentIndex(0)
             if existing:
                 self._scroll_to_card(existing)
@@ -1235,7 +1268,7 @@ class MainWindow(QMainWindow):
             if fid == "all":
                 card.setVisible(True)
             elif fid == "active":
-                card.setVisible(card.download_state == "downloading")
+                card.setVisible(card.download_state in ("downloading", "queued", "paused"))
             elif fid == "done":
                 card.setVisible(card.download_state == "completed")
 
@@ -1255,7 +1288,7 @@ class MainWindow(QMainWindow):
 
     def _update_status(self):
         total     = len(self.cards)
-        active    = sum(1 for c in self.cards if c.download_state == "downloading")
+        active    = sum(1 for c in self.cards if c.download_state in ("downloading", "queued"))
         completed = sum(1 for c in self.cards if c.download_state == "completed")
         errors    = sum(1 for c in self.cards if c.download_state == "error")
         tray = getattr(self, "_tray", None)
@@ -1323,13 +1356,29 @@ class MainWindow(QMainWindow):
                 return str(candidate)
         return str(Path.home())
 
+    def quit_from_tray(self):
+        """
+        Tepsi menüsündeki Çıkış buradan gelir. Pencereyi gösterip normal
+        closeEvent akışını (aktif indirme onayı dahil) çalıştırır —
+        tepsiye gizleme dalı _force_quit ile atlanır.
+        """
+        self._force_quit = True
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        self.close()
+
     def closeEvent(self, event):
         """Aktif indirme varsa kullanıcıya sor; tepsi aktifse gizle."""
-        active = [c for c in self.cards if c.download_state == "downloading"]
+        active = [c for c in self.cards
+                  if c.download_state in ("downloading", "queued", "paused")]
 
-        # Tepsi aktifse gizle
+        force_quit = getattr(self, "_force_quit", False)
+        self._force_quit = False    # tek seferlik — iptal edilirse normal akışa dön
+
+        # Tepsi aktifse gizle (tepsiden Çıkış hariç)
         tray = getattr(self, "_tray", None)
-        if tray and tray.isVisible():
+        if tray and tray.isVisible() and not force_quit:
             if active:
                 self.hide()
                 tray.notify("Arka Planda Çalışıyor",
