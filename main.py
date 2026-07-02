@@ -25,9 +25,9 @@ if str(_root) not in sys.path:
 #   frame texture upload'unda ProduceSkia başarısız olabilir → software fallback
 #   → ilk video açılış gecikmesi. GPU'yu ayrı process'te bırakmak (varsayılan)
 #   bu hatayı ortadan kaldırır.
-# --no-sandbox GEREKLİ: kaldırılınca uygulama açılıştan hemen sonra sessizce
-# çöküyor (test edildi, 2026-07). Muhtemel sebep: ASCII dışı karakter içeren
-# kurulum yolunda ("YENİLER" gibi) Chromium sandbox'ı başlatılamıyor.
+# --no-sandbox: mevcut davranış korunuyor. Kaldırılması izole test edilmedi
+# (2026-07'deki çökme incelemesinde suçlu nativeEvent çıktı, sandbox değil).
+# Kaldırmayı denemek isterseniz tek değişiklik olarak deneyip açılışı doğrulayın.
 os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS",
     "--disable-background-timer-throttling "
     "--disable-renderer-backgrounding "
