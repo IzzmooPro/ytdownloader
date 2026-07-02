@@ -51,3 +51,7 @@ ytdownloader/config/settings.json
 
 # ── İndirme geçmişi ───────────────────────────────────────────
 ytdownloader/config/history.json
+
+# ── Build ara çıktıları ────────────────────────────────────────
+build_out/
+YouTube İndirici Setup v*.exe
