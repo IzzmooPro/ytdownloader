@@ -159,7 +159,7 @@ class VideoCard(QFrame):
     def _build_ui(self):
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.setMaximumHeight(200)
+        self.setMaximumHeight(220)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_context_menu)
 
@@ -250,10 +250,12 @@ class VideoCard(QFrame):
 
         middle.addLayout(info_col, stretch=1)
 
-        # Kontrol sütunu (sağ) — sabit genişlik ve yükseklik
+        # Kontrol sütunu (sağ) — sabit genişlik; yükseklik en az thumbnail kadar.
+        # Sabit 94 px OLMAMALI: indirme sırasında hız grafiği (24 px) görünür
+        # olunca içerik sığmıyor ve butonlar alttan kırpılıyordu.
         ctrl_widget = QWidget()
         ctrl_widget.setFixedWidth(240)
-        ctrl_widget.setFixedHeight(94)
+        ctrl_widget.setMinimumHeight(94)
         ctrl_col = QVBoxLayout(ctrl_widget)
         ctrl_col.setSpacing(4)
         ctrl_col.setContentsMargins(0, 0, 0, 0)
@@ -444,7 +446,7 @@ class VideoCard(QFrame):
         self._btn_open_playlist.setText(btn_text)
         self._btn_open_playlist.setStyleSheet(btn_css)
         self._playlist_banner.setVisible(True)
-        self.setMaximumHeight(230)
+        self.setMaximumHeight(250)
 
     def _apply_btn_styles(self):
         """Buton stillerini temaya göre uygula — her iki temada görünür."""
