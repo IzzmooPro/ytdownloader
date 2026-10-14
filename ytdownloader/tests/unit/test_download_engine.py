@@ -164,3 +164,38 @@ class TestRunYdlPathValidation:
 
         assert result["status"] == "completed"
         assert result["file_path"] == str(real_file)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FFmpeg konumu — açılıştan sonra kurulan FFmpeg motor tarafından görülmeli
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestFfmpegRefresh:
+
+    def test_location_picked_up_after_late_install(self, engine, item, tmp_path, monkeypatch):
+        monkeypatch.setenv("APPDATA", str(tmp_path))
+        engine._base_path = tmp_path
+        engine._auth = None
+        engine._ffmpeg_location = None   # açılışta FFmpeg yoktu
+
+        # FFmpeg sonradan kuruldu
+        import os
+        ffdir = tmp_path / "MyYouTubeDownloader" / "ffmpeg"
+        ffdir.mkdir(parents=True)
+        (ffdir / ("ffmpeg.exe" if os.name == "nt" else "ffmpeg")).touch()
+
+        item.format = "mp3"
+        opts = engine._build_ydl_opts(item, threading.Event(), threading.Event())
+        assert opts is not None
+        assert opts["ffmpeg_location"] == str(ffdir)
+
+    def test_refresh_ffmpeg_updates_location(self, engine, tmp_path, monkeypatch):
+        import os
+        monkeypatch.setenv("APPDATA", str(tmp_path))
+        engine._base_path = tmp_path
+        engine._ffmpeg_location = None
+        ffdir = tmp_path / "MyYouTubeDownloader" / "ffmpeg"
+        ffdir.mkdir(parents=True)
+        (ffdir / ("ffmpeg.exe" if os.name == "nt" else "ffmpeg")).touch()
+        engine.refresh_ffmpeg()
+        assert engine._ffmpeg_location == str(ffdir)

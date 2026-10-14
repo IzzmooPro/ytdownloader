@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
 """DownloadManager — indirme motoru yöneticisi."""
 
-import os
 import threading
 from pathlib import Path
 
 from yt_dlp import YoutubeDL
 
-from ytdownloader.config.constants import DEFAULT_HTTP_HEADERS
+from ytdownloader.config.constants import DEFAULT_HTTP_HEADERS, AUTO_MAX_CONCURRENT
 from ytdownloader.models.download_item import DownloadItem
 from ytdownloader.infrastructure.state_manager import StateManager
 from ytdownloader.infrastructure.event_bus import EventBus, Events
-from ytdownloader.core.download_engine import DownloadEngine, _is_ssl_error
+from ytdownloader.core.download_engine import DownloadEngine
 from ytdownloader.infrastructure.logger import get_logger
+from ytdownloader.utils.file_utils import find_ffmpeg_dir
 
 log = get_logger("download_manager")
 
@@ -28,7 +28,7 @@ class DownloadManager:
         self._event_bus    = EventBus()
         self._state_manager = StateManager(self._event_bus)
         max_concurrent = settings_service.load().get("max_concurrent", 0)
-        max_workers = max_concurrent if max_concurrent > 0 else 4   # 0 = varsayılan (4)
+        max_workers = max_concurrent if max_concurrent > 0 else AUTO_MAX_CONCURRENT
         self._engine = DownloadEngine(
             state_manager = self._state_manager,
             event_bus     = self._event_bus,
@@ -66,29 +66,17 @@ class DownloadManager:
 
     def _init_ffmpeg(self):
         """FFmpeg konumunu tespit edip ydl_opts'a ekler."""
-        import sys as _sys
-        ffmpeg_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
-        appdata = os.environ.get("APPDATA") or os.path.expanduser("~")
-        candidates = [
-            # Kullanıcının bir kez indirdiği kalıcı FFmpeg her zaman önce gelir.
-            Path(appdata) / "MyYouTubeDownloader" / "ffmpeg",
-            self.base_path / "bin",
-            self.base_path / "ytdownloader" / "assets" / "ffmpeg",
-            self.base_path / "assets" / "ffmpeg",
-        ]
-        # PyInstaller içine gömülü kopya varsa son çare olarak kullan.
-        if hasattr(_sys, "_MEIPASS"):
-            candidates.append(Path(_sys._MEIPASS) / "ytdownloader" / "assets" / "ffmpeg")
-        for ffmpeg_dir in candidates:
-            if (ffmpeg_dir / ffmpeg_name).exists():
-                self._common_ydl_opts["ffmpeg_location"] = str(ffmpeg_dir)
-                log.info(f"FFmpeg konumu: {ffmpeg_dir}")
-                return
-        log.warning("FFmpeg bulunamadı — lokal klasörlerde yok")
+        ffmpeg_dir = find_ffmpeg_dir(self.base_path)
+        if ffmpeg_dir:
+            self._common_ydl_opts["ffmpeg_location"] = ffmpeg_dir
+            log.info(f"FFmpeg konumu: {ffmpeg_dir}")
+        else:
+            log.warning("FFmpeg bulunamadı — lokal klasörlerde yok")
 
     def refresh_ffmpeg(self) -> None:
         """FFmpeg konumunu yeniden tespit eder. Kurulum sonrası çağrılır."""
         self._init_ffmpeg()
+        self._engine.refresh_ffmpeg()
 
     # ── Public API ──────────────────────────────────────────────────────────
 
@@ -109,18 +97,8 @@ class DownloadManager:
             try:
                 log.info(f"Video bilgisi alınıyor: {url}")
                 opts = {**self._common_ydl_opts, "socket_timeout": 15}
-                try:
-                    with YoutubeDL(opts) as ydl:
-                        info = ydl.extract_info(url, download=False)
-                except Exception as e:
-                    # SSL hatasında bir kez fallback dene; diğer hataları ilet
-                    if _is_ssl_error(str(e)):
-                        log.warning(f"Fetch SSL hatası, nocheckcertificate ile yeniden deneniyor: {e}")
-                        opts["nocheckcertificate"] = True
-                        with YoutubeDL(opts) as ydl:
-                            info = ydl.extract_info(url, download=False)
-                    else:
-                        raise
+                with YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
                 if "entries" in info:
                     info = info["entries"][0]
                 log.info(f"Video bilgisi alındı: {info.get('title', '?')}")

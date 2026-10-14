@@ -6,6 +6,7 @@ Tüm kaynaklar aynı anda başlar, ilk tamamlanan kazanır.
 Diğerleri otomatik iptal edilir.
 """
 
+import hashlib
 import os
 import threading
 import zipfile
@@ -23,6 +24,41 @@ FFMPEG_URLS = [
 
 APPROX_SIZE_BYTES = 75 * 1024 * 1024  # fallback
 
+# Sabit sürümlü kaynakların bilinen SHA-256 özetleri
+_PINNED_SHA256 = {
+    "https://github.com/GyanD/codexffmpeg/releases/download/7.1/ffmpeg-7.1-essentials_build.zip":
+        "fa7d4d7e795db0e2503f49f105f46ed5852386f0cfdd819899be3b65ebde24fc",
+}
+_BTBN_CHECKSUMS_URL = "https://github.com/BtbN/ffmpeg-builds/releases/download/latest/checksums.sha256"
+
+
+def _fetch_text(url: str, timeout: int = 15) -> str:
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read(1024 * 1024).decode("utf-8", errors="replace")
+
+
+def _expected_sha256(url: str) -> str:
+    """
+    İndirilecek zip'in beklenen SHA-256 özetini döner.
+    Özet alınamazsa hata fırlatır — doğrulanamayan dosya asla kurulmaz.
+    """
+    if url in _PINNED_SHA256:
+        return _PINNED_SHA256[url]
+    if "BtbN" in url:
+        name = url.rsplit("/", 1)[-1]
+        for line in _fetch_text(_BTBN_CHECKSUMS_URL).splitlines():
+            parts = line.split()
+            if len(parts) == 2 and parts[1].lstrip("*") == name:
+                return parts[0].lower()
+        raise ValueError("checksum listesinde dosya yok")
+    if "gyan.dev" in url:
+        digest = _fetch_text(url + ".sha256").split()[0].lower()
+        if len(digest) != 64:
+            raise ValueError("geçersiz checksum")
+        return digest
+    raise ValueError("bu kaynak için checksum bilinmiyor")
+
 
 def _get_install_dir(base_path: Path) -> Path:
     """
@@ -32,19 +68,6 @@ def _get_install_dir(base_path: Path) -> Path:
     """
     appdata = os.environ.get("APPDATA") or os.path.expanduser("~")
     return Path(appdata) / "MyYouTubeDownloader" / "ffmpeg"
-
-
-def is_installed_locally(base_path) -> bool:
-    bp = Path(base_path)
-    ffmpeg_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
-    for d in [
-        bp / "bin",
-        bp / "ytdownloader" / "assets" / "ffmpeg",
-        bp / "assets" / "ffmpeg",
-    ]:
-        if (d / ffmpeg_name).exists():
-            return True
-    return False
 
 
 def download_and_install(base_path, progress_callback=None, done_callback=None):
@@ -84,6 +107,8 @@ def download_and_install(base_path, progress_callback=None, done_callback=None):
             if winner_found.is_set():
                 return
 
+            expected_sha = _expected_sha256(url)
+
             req  = urllib.request.Request(url, headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
             })
@@ -102,6 +127,7 @@ def download_and_install(base_path, progress_callback=None, done_callback=None):
             total      = int(resp.headers.get("Content-Length", 0)) or APPROX_SIZE_BYTES
             downloaded = 0
             chunk      = 1024 * 1024  # 1 MB
+            hasher     = hashlib.sha256()
 
             with open(tmp_zip, "wb") as f:
                 while True:
@@ -113,6 +139,7 @@ def download_and_install(base_path, progress_callback=None, done_callback=None):
                     if not data:
                         break
                     f.write(data)
+                    hasher.update(data)
                     downloaded += len(data)
                     if is_lead and progress_callback and not winner_found.is_set():
                         pct      = min(78, 5 + int(downloaded * 73 / total))
@@ -123,6 +150,10 @@ def download_and_install(base_path, progress_callback=None, done_callback=None):
                             f"İndiriliyor...  {mb_dl:.1f} / {mb_total:.0f} MB"
                         )
             resp.close()
+
+            # Bütünlük kontrolü — bozuk veya değiştirilmiş dosya kurulmaz
+            if hasher.hexdigest() != expected_sha:
+                raise ValueError("SHA-256 doğrulaması başarısız")
 
             # Kazananı belirle
             with winner_lock:

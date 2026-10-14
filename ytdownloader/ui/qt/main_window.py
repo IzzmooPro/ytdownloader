@@ -19,6 +19,7 @@ from ytdownloader.ui.qt.icon_helper import set_icon, make_icon
 from ytdownloader.ui.qt.dialogs import SettingsDialog, AboutDialog
 from ytdownloader.ui.qt.playlist_dialog import PlaylistDialog
 from ytdownloader.services.update_service import UpdateService
+from ytdownloader.services.ytdlp_update_service import YtdlpUpdateService
 from ytdownloader.ui.qt.tray_icon import TrayIcon
 from ytdownloader.ui.qt.youtube_tab import YouTubeTab
 from ytdownloader.services.i18n_service import get_i18n
@@ -81,6 +82,9 @@ class MainWindow(QMainWindow):
         lang = self.settings.get("language", "tr")
         self._i18n = get_i18n(lang)
         self._update_service = UpdateService()
+        # İndirme motoru (yt-dlp) — menü yok, arka planda günde bir sessiz kontrol
+        self._ytdlp_updater = YtdlpUpdateService(self)
+        self._ytdlp_updater.finished.connect(self._on_ytdlp_update_finished)
 
         self._build_ui()
         self._build_menu()
@@ -102,6 +106,7 @@ class MainWindow(QMainWindow):
         # show_no_update=False: yeni sürüm yoksa sessiz kalır.
         from PyQt6.QtCore import QTimer
         QTimer.singleShot(3000, lambda: self._update_service.check(self, show_no_update=False))
+        QTimer.singleShot(5000, lambda: self._ytdlp_updater.check(manual=False))
 
         # İndirme sürerken sistemin uykuya dalmasını engelleme durumu
         self._keep_awake_active = False
@@ -1219,6 +1224,15 @@ class MainWindow(QMainWindow):
                 f"🔄 Format Değiştirildi",
                 f"{changed} kart {fmt} olarak ayarlandı",
                 "info"
+            )
+
+    def _on_ytdlp_update_finished(self, result: dict, manual: bool):
+        """Yeni indirme motoru indirildiyse bilgi ver; diğer durumlarda sessiz kal."""
+        if result.get("status") == "installed":
+            self.notification_center.show(
+                self._t("motor_guncellendi_baslik"),
+                self._t("motor_guncellendi_govde"),
+                "success",
             )
 
     def _open_history(self):

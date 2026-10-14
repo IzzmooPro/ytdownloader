@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QPointF, QSize
 from PyQt6.QtGui import QPixmap, QPainter, QColor, QPolygonF
 from ytdownloader.services.i18n_service import get_i18n, I18nService
+from ytdownloader.config.constants import MAX_CONCURRENT_LIMIT
 
 
 def _divider(color="#2e3348"):
@@ -358,7 +359,7 @@ class SettingsDialog(QDialog):
             if v > 0: self._spin_val.setText(str(v-1))
         def _inc():
             v = int(self._spin_val.text())
-            if v < 5: self._spin_val.setText(str(v+1))
+            if v < MAX_CONCURRENT_LIMIT: self._spin_val.setText(str(v+1))
         btn_minus.clicked.connect(_dec); btn_plus.clicked.connect(_inc)
         spin_lay.addWidget(btn_minus); spin_lay.addWidget(self._spin_val); spin_lay.addWidget(btn_plus)
         r = QHBoxLayout(); r.addWidget(_lbl(self._t("eszamanli_indirme"))); r.addWidget(spin_widget); r.addStretch()

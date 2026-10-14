@@ -28,16 +28,10 @@ from ytdownloader.models.download_state import DownloadState, StateError
 from ytdownloader.infrastructure.state_manager import StateManager
 from ytdownloader.infrastructure.event_bus import EventBus
 from ytdownloader.infrastructure.logger import get_logger
-from ytdownloader.utils.file_utils import is_ffmpeg_available
+from ytdownloader.utils.file_utils import is_ffmpeg_available, find_ffmpeg_dir
 from ytdownloader.core.retry_engine import RetryEngine, RetryConfig
 
 log = get_logger("download_engine")
-
-
-def _is_ssl_error(error: str) -> bool:
-    """SSL/TLS kaynaklı hata mı kontrol eder."""
-    err = error.lower()
-    return any(k in err for k in ("ssl", "certificate", "handshake", "tlsv1", "cert"))
 
 
 class _DownloadCancelledError(Exception):
@@ -74,26 +68,13 @@ class DownloadEngine:
             jitter       = 1.0,
         ))
 
-        # FFmpeg konumunu bir kez belirle — _build_ydl_opts tekrar aramaz
-        self._ffmpeg_location: str | None = self._detect_ffmpeg()
+        # FFmpeg konumu — kurulum sonrası refresh_ffmpeg() ile güncellenir
+        self._ffmpeg_location: str | None = find_ffmpeg_dir(self._base_path)
 
-    def _detect_ffmpeg(self) -> str | None:
-        """FFmpeg klasörünü bir kez tespit eder. Sonuç önbelleğe alınır."""
-        import sys as _sys
-        ffmpeg_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
-        appdata = os.environ.get("APPDATA") or os.path.expanduser("~")
-        candidates = [
-            Path(appdata) / "MyYouTubeDownloader" / "ffmpeg",
-            self._base_path / "bin",
-            self._base_path / "ytdownloader" / "assets" / "ffmpeg",
-            self._base_path / "assets" / "ffmpeg",
-        ]
-        if hasattr(_sys, "_MEIPASS"):
-            candidates.append(Path(_sys._MEIPASS) / "ytdownloader" / "assets" / "ffmpeg")
-        for d in candidates:
-            if (d / ffmpeg_name).exists():
-                return str(d)
-        return None
+    def refresh_ffmpeg(self) -> None:
+        """FFmpeg konumunu yeniden tespit eder.
+        Açılışta FFmpeg henüz kurulmamış olabilir; kurulum bitince çağrılır."""
+        self._ffmpeg_location = find_ffmpeg_dir(self._base_path)
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -273,17 +254,7 @@ class DownloadEngine:
         if opts is None:
             return {"status": "error", "error": "FFmpeg gerekli ama bulunamadı"}
 
-        result = self._run_ydl(item, opts, cancel_ev)
-
-        # SSL hatasında bir kez nocheckcertificate ile yeniden dene
-        if (result.get("status") == "error"
-                and _is_ssl_error(result.get("error", ""))
-                and not cancel_ev.is_set()):
-            log.warning(f"[{item.id}] SSL hatası — nocheckcertificate ile yeniden deneniyor")
-            opts["nocheckcertificate"] = True
-            result = self._run_ydl(item, opts, cancel_ev)
-
-        return result
+        return self._run_ydl(item, opts, cancel_ev)
 
     def _run_ydl(self, item: DownloadItem, opts: dict,
                  cancel_ev: threading.Event) -> dict:
@@ -438,7 +409,9 @@ class DownloadEngine:
         if self._auth:
             opts.update(self._auth.get_ydl_cookie_opts())
 
-        # FFmpeg konumu — init'te bir kez tespit edildi
+        # FFmpeg konumu — init'te bulunamadıysa (ör. sonradan kurulduysa) tekrar ara
+        if ffmpeg_ok and not self._ffmpeg_location:
+            self.refresh_ffmpeg()
         if self._ffmpeg_location:
             opts["ffmpeg_location"] = self._ffmpeg_location
 

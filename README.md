@@ -7,11 +7,12 @@ A Windows desktop application focused on downloading YouTube videos and audio as
 ## Features
 
 - Download video (MP4) and audio (MP3) from YouTube URLs
-- Up to 8 simultaneous parallel downloads
+- Up to 5 simultaneous parallel downloads (default: 4)
 - MP3 ID3 tag and cover art (thumbnail) embedding
 - Dark / Light theme
 - Windows toast notifications
-- Automatic FFmpeg installation (requires internet connection)
+- Automatic FFmpeg installation with SHA-256 verification (requires internet connection)
+- Automatic yt-dlp (download engine) updates in the background, checked daily; active after restart
 - Drag & drop queue reordering
 - Download speed graph and speed limiter
 - Playlist support (select individual videos)
@@ -34,11 +35,11 @@ A Windows desktop application focused on downloading YouTube videos and audio as
 
 **Requirements:**
 - Python 3.11 – 3.13
-- PyQt6, yt-dlp, mutagen, requests, certifi
+- PyQt6, PyQt6-WebEngine, yt-dlp, certifi, mutagen
 
 **Install dependencies:**
 ```bash
-pip install pyqt6 yt-dlp mutagen requests certifi
+pip install pyqt6 pyqt6-webengine yt-dlp certifi mutagen
 ```
 
 **Run:**

@@ -85,9 +85,10 @@ def safe_resolve(path_str: str) -> Path:
     return Path(path_str).resolve()
 
 
-def is_ffmpeg_available(base_path=None) -> bool:
-    """FFmpeg'in program klasöründe mevcut olup olmadığını kontrol eder.
-    Sistem PATH'e BAKMAZ — sadece program içi klasörler kontrol edilir."""
+def find_ffmpeg_dir(base_path=None) -> str | None:
+    """FFmpeg'in bulunduğu klasörü döner, yoksa None.
+    Sistem PATH'e BAKMAZ — sadece program içi klasörler kontrol edilir.
+    Tüm FFmpeg aramaları bu fonksiyondan geçer (tek doğruluk kaynağı)."""
     import os, sys
     from pathlib import Path
     ffmpeg_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
@@ -109,5 +110,10 @@ def is_ffmpeg_available(base_path=None) -> bool:
 
     for d in candidates:
         if (d / ffmpeg_name).exists():
-            return True
-    return False
+            return str(d)
+    return None
+
+
+def is_ffmpeg_available(base_path=None) -> bool:
+    """FFmpeg'in program klasöründe mevcut olup olmadığını kontrol eder."""
+    return find_ffmpeg_dir(base_path) is not None

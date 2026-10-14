@@ -16,8 +16,9 @@ GITHUB_REPO = "IzzmooPro/ytdownloader"
 UPDATE_CHECK_DELAY_MS = 2000
 
 # İndirme varsayılanları
-DEFAULT_MAX_CONCURRENT = 0  # 0 = sınırsız
-MAX_CONCURRENT_LIMIT   = 10
+DEFAULT_MAX_CONCURRENT = 0  # 0 = otomatik
+AUTO_MAX_CONCURRENT    = 4  # "otomatik" seçildiğinde eşzamanlı indirme sayısı
+MAX_CONCURRENT_LIMIT   = 5  # ayarlar ekranındaki üst sınır
 
 # Thumbnail cache
 THUMBNAIL_MEMORY_LIMIT = 50        # adet

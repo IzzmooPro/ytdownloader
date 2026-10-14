@@ -228,3 +228,9 @@ class TestDownloadsLock:
         assert callable(getattr(dm, "refresh_ffmpeg", None))
         # İçeride _init_ffmpeg'i çağırır; mock ortamında sessizce geçer
         dm.refresh_ffmpeg()
+
+    def test_refresh_ffmpeg_also_refreshes_engine(self, dm):
+        """FFmpeg sonradan kurulunca motor da yeni konumu öğrenmeli."""
+        dm._engine = MagicMock()
+        dm.refresh_ffmpeg()
+        dm._engine.refresh_ffmpeg.assert_called_once()

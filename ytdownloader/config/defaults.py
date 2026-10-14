@@ -15,7 +15,7 @@ DEFAULT_SETTINGS: dict = {
     "last_download_folder":    None,
     "default_format":          "MP3",
     "default_quality":         "320 kbps",
-    "max_concurrent":          0,          # 0 = sınırsız
+    "max_concurrent":          0,          # 0 = otomatik (AUTO_MAX_CONCURRENT)
     "sequential_mode":         False,      # True = sıralı indirme
     "speed_limit_enabled":     False,
     "speed_limit_mbps":        5,          # MB/s

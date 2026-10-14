@@ -64,6 +64,13 @@ except ImportError as e:
     input("Devam etmek icin Enter'a basin...")
     sys.exit(1)
 
+# İndirilmiş güncel yt-dlp varsa, yt_dlp ilk kez import edilmeden ÖNCE devreye al
+try:
+    from ytdownloader.utils.ytdlp_updater import activate_override
+    activate_override()
+except Exception as e:
+    log.warning(f"yt-dlp güncellemesi etkinleştirilemedi: {e}")
+
 log.debug("Uygulama modulleri import ediliyor...")
 try:
     from ytdownloader.infrastructure.settings_service import SettingsService

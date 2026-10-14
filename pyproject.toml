@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "ytdownloader"
@@ -10,11 +10,10 @@ requires-python = ">=3.11"
 
 dependencies = [
     "yt-dlp>=2024.1.0",
-    "ttkbootstrap>=1.10.1",
-    "Pillow>=10.0.0",
-    "requests>=2.31.0",
-    "matplotlib>=3.7.0",
-    "pystray>=0.19.5",
+    "PyQt6>=6.5",
+    "PyQt6-WebEngine>=6.5",   # YouTube sekmesi (yoksa sekme devre dışı kalır)
+    "certifi",                # yt-dlp'nin SSL sertifika doğrulaması için
+    "mutagen",                # yt-dlp kapak resmi / etiket gömme (opsiyonel kullanım)
 ]
 
 [project.optional-dependencies]
@@ -26,9 +25,6 @@ dev = [
     "pre-commit>=3.5",
     "pip-audit>=2.6",
 ]
-
-[project.scripts]
-ytdownloader = "ytdownloader.main:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
