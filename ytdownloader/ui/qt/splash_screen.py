@@ -212,7 +212,13 @@ class SplashScreen(QWidget):
         QTimer.singleShot(400, lambda: self._do_finish(main_window))
 
     def _do_finish(self, main_window):
-        main_window.show()
+        # Ana pencere "simge durumunda başlat" ile gizli kalabilir; splash
+        # kapanınca görünür pencere kalmadığı için Qt uygulamayı kapatmasın.
+        self.setAttribute(Qt.WidgetAttribute.WA_QuitOnClose, False)
+        if hasattr(main_window, "show_initial"):
+            main_window.show_initial()
+        else:
+            main_window.show()
         self.close()
 
     # ── Yardımcı ─────────────────────────────────────────────────────────────

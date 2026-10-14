@@ -105,6 +105,13 @@ class DownloadEngine:
             log.warning(f"[{download_id}] pause: aktif indirme bulunamadı")
             return False
 
+        # FFmpeg dönüştürme/birleştirme sırasında progress hook çağrılmaz;
+        # duraklatma isteği hiçbir zaman karşılanmaz ve kart takılı kalırdı.
+        item = self._sm.get_item(download_id)
+        if item is not None and item.post_processing:
+            log.info(f"[{download_id}] pause reddedildi: dönüştürme sürüyor")
+            return False
+
         try:
             self._sm.transition(download_id, DownloadState.PAUSING)
         except StateError as e:
@@ -151,14 +158,8 @@ class DownloadEngine:
         if pause_ev:
             pause_ev.set()          # eğer pause'daysa önce blokajı kaldır
 
-        # .part dosyasını sil
-        item = self._sm.get_item(download_id)
-        if item and item.partial_file and os.path.exists(item.partial_file):
-            try:
-                os.remove(item.partial_file)
-                log.debug(f"[{download_id}] .part dosyası silindi")
-            except Exception as e:
-                log.warning(f"[{download_id}] .part silinemedi: {e}")
+        # .part dosyaları worker yt-dlp'den çıktıktan sonra _handle_result'ta
+        # silinir — burada silmek açık dosyayla yarışır (Windows'ta başarısız olur).
 
         try:
             self._sm.transition(download_id, DownloadState.CANCELLED)
@@ -183,6 +184,7 @@ class DownloadEngine:
         thread'leri daemon olmadığı için önce cancel+pause event'leri set edilerek
         uyandırılmalı — aksi halde uygulama çıkışta sonsuza kadar takılır.
         """
+        self._shutting_down = True
         with self._lock:
             for ev in self._cancel_events.values():
                 ev.set()
@@ -250,6 +252,7 @@ class DownloadEngine:
         if cancel_ev.is_set():
             return {"status": "cancelled"}
 
+        item.post_processing = False
         opts = self._build_ydl_opts(item, pause_ev, cancel_ev)
         if opts is None:
             return {"status": "error", "error": "FFmpeg gerekli ama bulunamadı"}
@@ -296,6 +299,16 @@ class DownloadEngine:
     def _handle_result(self, item: DownloadItem, result: dict) -> None:
         status = result.get("status")
 
+        # Duraklatma isteği indirme bittikten sonra geldiyse (ör. dönüştürme
+        # başlamadan hemen önce) durum PAUSING/PAUSED kalır; COMPLETED geçişi
+        # buradan geçersiz olduğu için kart sonsuza kadar takılırdı.
+        if status == "completed" and self._sm.get_state(item.id) in (
+                DownloadState.PAUSING, DownloadState.PAUSED):
+            try:
+                self._sm.transition(item.id, DownloadState.ACTIVE)
+            except StateError:
+                pass
+
         if status == "completed":
             self._sm.set_final_file(item.id, result.get("file_path", ""))
             try:
@@ -305,6 +318,10 @@ class DownloadEngine:
             log.info(f"[{item.id}] ✓ Tamamlandı: {result.get('file_path')}")
 
         elif status == "cancelled":
+            # Kapanışta iptal edilenlerin parçaları korunur (kuyruk geri
+            # yüklenince kaldığı yerden devam eder); kullanıcı iptalinde silinir.
+            if not getattr(self, "_shutting_down", False):
+                self._remove_partials(item)
             try:
                 self._sm.transition(item.id, DownloadState.CANCELLED)
             except StateError:
@@ -313,6 +330,39 @@ class DownloadEngine:
         else:
             error = result.get("error", "Bilinmeyen hata")
             self._sm.set_error(item.id, error)
+
+    def _remove_partials(self, item: DownloadItem) -> None:
+        """
+        İptal edilen indirmenin yarım dosyalarını siler.
+        MP4'te yt-dlp görüntü ve sesi ayrı parçalara yazar
+        ("Başlık [id].f137.mp4.part", "Başlık [id].f140.m4a.part");
+        planlanan dosya adının kökü ile başlayan tüm .part/.ytdl dosyaları temizlenir.
+        """
+        if not item.partial_file:
+            return
+        planned = Path(item.partial_file.removesuffix(".part"))
+        prefix  = planned.stem + "."
+        try:
+            candidates = list(planned.parent.iterdir())
+        except OSError:
+            return
+        for f in candidates:
+            name = f.name
+            if not name.startswith(prefix):
+                continue
+            if name.endswith(".part") or name.endswith(".ytdl") or ".part-Frag" in name:
+                try:
+                    f.unlink()
+                    log.debug(f"[{item.id}] Yarım dosya silindi: {name}")
+                except OSError as e:
+                    log.warning(f"[{item.id}] Yarım dosya silinemedi ({name}): {e}")
+
+    def _make_postprocessor_hook(self, item: DownloadItem) -> Callable:
+        """FFmpeg aşaması başlayınca işaretler — bu aşamada pause reddedilir."""
+        def hook(d: dict) -> None:
+            if d.get("status") == "started":
+                item.post_processing = True
+        return hook
 
     # ── Progress Hook ─────────────────────────────────────────────────────────
 
@@ -399,6 +449,7 @@ class DownloadEngine:
             "http_headers":          DEFAULT_HTTP_HEADERS,
             "continuedl":            True,   # kaldığı yerden devam
             "progress_hooks":        [self._make_progress_hook(item.id, pause_ev, cancel_ev)],
+            "postprocessor_hooks":   [self._make_postprocessor_hook(item)],
             # [%(id)s] eki: aynı başlıklı farklı videoların birbirinin .part
             # dosyasına devam etmesini / üzerine yazmasını önler.
             "outtmpl":               str(Path(item.output_dir) / "%(title)s [%(id)s].%(ext)s"),

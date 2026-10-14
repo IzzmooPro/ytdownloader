@@ -183,6 +183,20 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+    def show_initial(self):
+        """
+        Açılışta pencereyi gösterir. "Simge durumunda başlat" açıksa:
+        tepsi varsa tepside gizli başlar, yoksa görev çubuğunda simge durumunda.
+        """
+        if not self.settings.get("start_minimized", False):
+            self.show()
+            return
+        tray = getattr(self, "_tray", None)
+        if tray and tray.isVisible():
+            log.info("Simge durumunda başlatıldı (tepside)")
+            return
+        self.showMinimized()
+
     def _setup_tray(self):
         """Sistem tepsisi ikonunu kur."""
         from PyQt6.QtWidgets import QSystemTrayIcon
@@ -719,8 +733,10 @@ class MainWindow(QMainWindow):
     def _toggle_theme(self):
         theme_manager.toggle()
         self._apply_theme()
+        # Yalnızca bu anahtarı yaz — elimizdeki kopya eski olabilir,
+        # tamamını kaydetmek araya giren ayar değişikliklerini geri alır.
         self.settings["theme"] = theme_manager.current
-        self.settings_manager.save(self.settings)
+        self.settings_manager.update("theme", theme_manager.current)
 
     # ── URL İşlemleri ────────────────────────────────────────────────────────
 
@@ -746,7 +762,18 @@ class MainWindow(QMainWindow):
 
     def _add_urls_from_text(self, text: str):
         """Metindeki geçerli YouTube URL'lerini karta çevirir (yapıştır + sürükle-bırak)."""
+        from ytdownloader.utils.url_utils import is_playlist_url
         urls = [u.strip() for u in text.splitlines() if u.strip()]
+
+        # Saf playlist linki (youtube.com/playlist?list=...) kart olamaz —
+        # seçim penceresini aç. Tek seferde yalnızca bir pencere açılır.
+        playlist = next((u for u in urls if is_playlist_url(u)), None)
+        if playlist:
+            urls = [u for u in urls if not is_playlist_url(u)]
+            self._handle_playlist(playlist)
+            if not urls:
+                return
+
         added = 0
         for url in urls:
             valid, _ = validate_youtube_url(url)
@@ -1079,7 +1106,7 @@ class MainWindow(QMainWindow):
         if not folder:
             return
         self.settings["last_download_folder"] = folder
-        self.settings_manager.save(self.settings)
+        self.settings_manager.update("last_download_folder", folder)
         # Tüm idle kartlara klasörü ata — tekrar sorulmayacak
         for card in idle_cards:
             card.download_folder = folder

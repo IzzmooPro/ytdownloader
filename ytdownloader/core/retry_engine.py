@@ -38,7 +38,10 @@ _NON_RETRYABLE_PATTERNS = [
     r"sign in to confirm your age",
     r"this video is not available",
     r"no video formats found",
-    r"urlopen error",           # DNS hatası — retry işe yaramaz
+    r"unsupported url",
+    r"http error 404",
+    # NOT: "urlopen error" burada OLMAMALI — bağlantı kopması, zaman aşımı ve
+    # geçici DNS hataları da bu mesajla gelir; tam olarak yeniden denenmesi gerekenler.
 ]
 
 _NON_RETRYABLE_RE = re.compile(

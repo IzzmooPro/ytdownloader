@@ -17,13 +17,14 @@ def extract_video_id(url: str) -> str | None:
     except Exception:
         return None
 
-    if parsed.netloc in ("www.youtube.com", "youtube.com", "music.youtube.com"):
-        # /shorts/VIDEO_ID formatı
+    if parsed.netloc in ("www.youtube.com", "youtube.com", "music.youtube.com", "m.youtube.com"):
+        # /shorts/ID, /live/ID, /embed/ID formatları
         parts = parsed.path.split("/")
-        if "shorts" in parts:
-            idx = parts.index("shorts")
-            if idx + 1 < len(parts) and parts[idx + 1]:
-                return parts[idx + 1]
+        for marker in ("shorts", "live", "embed"):
+            if marker in parts:
+                idx = parts.index(marker)
+                if idx + 1 < len(parts) and parts[idx + 1]:
+                    return parts[idx + 1]
         # Normal watch?v=VIDEO_ID
         params = urllib.parse.parse_qs(parsed.query)
         return params.get("v", [None])[0]
@@ -37,6 +38,21 @@ def extract_video_id(url: str) -> str | None:
             return parts[-1] or None
 
     return None
+
+
+def is_playlist_url(url: str) -> bool:
+    """
+    Video içermeyen saf playlist linki mi? (youtube.com/playlist?list=...)
+    Bu linkler kart yerine playlist seçim penceresine yönlendirilir.
+    """
+    try:
+        parsed = urllib.parse.urlparse(url.strip())
+    except Exception:
+        return False
+    if parsed.netloc not in VALID_YT_DOMAINS:
+        return False
+    params = urllib.parse.parse_qs(parsed.query)
+    return bool(params.get("list")) and not params.get("v") and extract_video_id(url) is None
 
 
 def is_shorts_url(url: str) -> bool:

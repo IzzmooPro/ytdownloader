@@ -800,7 +800,7 @@ class VideoCard(QFrame):
                     return
                 self.download_folder = folder
                 self.settings["last_download_folder"] = folder
-                self.settings_manager.save(self.settings)
+                self.settings_manager.update("last_download_folder", folder)
 
         selected = self.cmb_resolution.currentText()
         # Hız limiti ayardan al
@@ -995,8 +995,10 @@ class VideoCard(QFrame):
         )
         if folder:
             self.download_folder = folder
+            # Kartın ayar kopyası kart oluşturulduğundan beri eskimiş olabilir —
+            # tamamını değil yalnızca bu anahtarı yaz.
             self.settings["last_download_folder"] = folder
-            self.settings_manager.save(self.settings)
+            self.settings_manager.update("last_download_folder", folder)
 
     def _on_remove(self):
         # paused: worker thread pause_ev.wait()'te bloklu — cancel ile uyandırılmalı,

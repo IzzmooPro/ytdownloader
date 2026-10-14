@@ -34,6 +34,7 @@ VALID_YT_DOMAINS = frozenset({
     "youtu.be", "www.youtu.be",
     "youtube-nocookie.com", "www.youtube-nocookie.com",
     "music.youtube.com",
+    "m.youtube.com",            # telefondan paylaşılan linkler
 })
 
 # yt-dlp ortak HTTP başlıkları

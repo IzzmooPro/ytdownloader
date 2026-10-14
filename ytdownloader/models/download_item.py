@@ -49,6 +49,8 @@ class DownloadItem:
     # Dosya
     partial_file: str = ""
     final_file: str = ""
+    # FFmpeg dönüştürme/birleştirme sürüyor mu — bu aşamada duraklatılamaz
+    post_processing: bool = False
 
     # Zamanlama
     created_at: datetime = field(default_factory=datetime.now)

@@ -110,3 +110,31 @@ class TestGetThumbnailUrls:
 
     def test_none_id(self):
         assert get_thumbnail_urls(None) == []  # type: ignore
+
+
+class TestExtraUrlForms:
+    """Telefondan paylaşılan, canlı yayın, embed ve saf playlist linkleri."""
+
+    @pytest.mark.parametrize("url", [
+        "https://m.youtube.com/watch?v=dQw4w9WgXcQ",
+        "https://www.youtube.com/live/dQw4w9WgXcQ?si=abc",
+        "https://www.youtube.com/embed/dQw4w9WgXcQ",
+    ])
+    def test_accepted(self, url):
+        from ytdownloader.utils.url_utils import extract_video_id
+        assert validate_youtube_url(url)[0] is True
+        assert extract_video_id(url) == "dQw4w9WgXcQ"
+
+    def test_pure_playlist_detected(self):
+        from ytdownloader.utils.url_utils import is_playlist_url
+        assert is_playlist_url("https://www.youtube.com/playlist?list=PLx0sYbCqOb8TBPRdmBHs5Iftvv9TPboYG")
+        assert is_playlist_url("https://m.youtube.com/playlist?list=PLabc")
+
+    @pytest.mark.parametrize("url", [
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ",  # video + liste → kart
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "https://evil.com/playlist?list=PL1",
+    ])
+    def test_not_pure_playlist(self, url):
+        from ytdownloader.utils.url_utils import is_playlist_url
+        assert not is_playlist_url(url)
