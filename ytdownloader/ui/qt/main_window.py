@@ -790,7 +790,7 @@ class MainWindow(QMainWindow):
             # Geçerli link ama zaten listede — "geçersiz URL" demek yanıltıcıydı
             self._scroll_to_card(existing)
             self.notification_center.show(
-                "ℹ " + self._t("zaten_listede_baslik"),
+                self._t("zaten_listede_baslik"),
                 self._t("zaten_listede_govde"), "info"
             )
         elif added == 0:
@@ -1226,7 +1226,7 @@ class MainWindow(QMainWindow):
             self._tabs.setCurrentIndex(0)
             self._scroll_to_card(existing)
             self.notification_center.show(
-                "ℹ " + self._t("zaten_listede_baslik"),
+                self._t("zaten_listede_baslik"),
                 self._t("zaten_listede_govde"),
                 "info"
             )
@@ -1234,8 +1234,8 @@ class MainWindow(QMainWindow):
             self._add_card(url)
             self._tabs.setCurrentIndex(0)
             self.notification_center.show(
-                "✅ Video Eklendi",
-                "İndirme Yöneticisi sekmesine geçildi.",
+                self._t("video_eklendi_baslik"),
+                self._t("video_eklendi_govde"),
                 "success"
             )
 
@@ -1468,7 +1468,7 @@ class MainWindow(QMainWindow):
 
             err_str = f", {self._t('n_hata', n=errors)}" if errors > 0 else ""
             self.notification_center.show(
-                "✅  " + self._t("indirmeler_tamamlandi"),
+                self._t("indirmeler_tamamlandi"),
                 f"{self._t('n_video_indirildi', n=completed)} · {size_str}{err_str}",
                 "success"
             )

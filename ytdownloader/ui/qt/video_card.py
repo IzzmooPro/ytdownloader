@@ -1036,7 +1036,7 @@ class VideoCard(QFrame):
             self._set_state("completed")
             if self.settings.get("notify_complete", True):
                 self.notification_center.show(
-                    "✅ " + get_i18n().t("indirme_tamamlandi"),
+                    get_i18n().t("indirme_tamamlandi"),
                     self.full_title,
                     "success"
                 )
