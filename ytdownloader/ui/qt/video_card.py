@@ -1004,13 +1004,10 @@ class VideoCard(QFrame):
 
             if speed:
                 spd_str = self._fmt_size(speed) + "/s"
-                dur = getattr(self, "_video_duration", 0)
-                if dur and dur > 0 and eta and eta > 0:
-                    elapsed = dur - eta
-                    elapsed = max(0, elapsed)
-                    time_str = f" · {format_duration(int(elapsed))}/{format_duration(int(dur))}"
-                elif eta and eta > 0:
-                    time_str = f" · {format_duration(int(eta))} kaldı"
+                # Kalan indirme süresi. (Eskiden video süresinden ETA çıkarılıp
+                # "27:05/30:23" gösteriliyordu — oynatma konumu gibi okunuyordu.)
+                if eta and eta > 0:
+                    time_str = " · " + get_i18n().t("kalan_sure", t=format_duration(int(eta)))
                 else:
                     time_str = ""
                 self.lbl_speed.setText(spd_str + time_str)

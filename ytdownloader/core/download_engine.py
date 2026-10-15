@@ -41,6 +41,25 @@ _PARTIAL_DELETE_ATTEMPTS = 7
 _PARTIAL_DELETE_DELAY_S  = 0.5
 
 
+def _progress_percent(d: dict) -> float:
+    """
+    yt-dlp progress hook verisinden yüzde hesaplar.
+
+    Parçalı (HLS/DASH, "frag 168/344") indirmelerde toplam boyut tahmini ilk
+    anda ~1 KB gelir ve yüzde %100 görünür; kartın ilerleme çubuğu geri
+    gitmediği için %100'de takılı kalıyordu. Parça sayısı varsa ona göre
+    hesaplanır. İndirme sürerken %100 gösterilmez — %100 yalnızca bitince.
+    """
+    frag_count = d.get("fragment_count")
+    frag_index = d.get("fragment_index")
+    if frag_count and frag_index is not None:
+        pct = frag_index / frag_count * 100
+    else:
+        total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
+        pct = (d.get("downloaded_bytes") or 0) / total * 100 if total else 0.0
+    return max(0.0, min(pct, 99.9))
+
+
 class _DownloadCancelledError(Exception):
     """Progress hook'tan indirmeyi durdurmak için kullanılır."""
     pass
@@ -428,7 +447,7 @@ class DownloadEngine:
             # ── Progress güncelleme ───────────────────────────────────────
             if d.get("status") == "downloading":
                 total = d.get("total_bytes") or d.get("total_bytes_estimate", 0)
-                pct   = d.get("downloaded_bytes", 0) / total * 100 if total else 0
+                pct   = _progress_percent(d)
                 speed = d.get("speed", 0) or 0
                 eta   = d.get("eta")
 
