@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from ytdownloader.infrastructure.logger import get_logger
+from ytdownloader.services.i18n_service import get_i18n
 
 log = get_logger("playlist_dialog")
 
@@ -266,7 +267,7 @@ class PlaylistDialog(QDialog):
                     info = ydl.extract_info(self.url, download=False)
 
                 if not info:
-                    self._error_signal.emit("Playlist bilgisi alınamadı.")
+                    self._error_signal.emit(get_i18n().t("playlist_alinamadi"))
                     return
 
                 raw_entries = info.get("entries") or []
@@ -276,7 +277,10 @@ class PlaylistDialog(QDialog):
                     entries = []
 
                 if not entries:
-                    self._error_signal.emit("Playlist boş veya erişilemiyor.")
+                    # yt-dlp listeye ulaşamazsa (gizli/silinmiş liste, eksik
+                    # kopyalanmış list= kimliği) sessizce tek videoya döner.
+                    log.warning(f"Playlist açılamadı, yt-dlp tek video döndürdü: {self.url}")
+                    self._error_signal.emit(get_i18n().t("playlist_erisilemiyor"))
                     return
 
                 result = []
