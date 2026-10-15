@@ -1512,6 +1512,22 @@ class MainWindow(QMainWindow):
                 return str(candidate)
         return str(Path.home())
 
+    def quit_for_update(self) -> bool:
+        """
+        Güncelleme kurulumu için uygulamayı kapatır. Normal kapanış akışı
+        çalışır (kuyruk diske yazılır); "çıkmak istiyor musunuz" sorusu
+        sorulmaz ama aktif indirme varsa onay yine istenir.
+        Returns: pencere kapandıysa True (kullanıcı vazgeçtiyse False).
+        """
+        self._force_quit = True
+        self._updating   = True
+        try:
+            self.show()
+            self.raise_()
+            return self.close()
+        finally:
+            self._updating = False
+
     def quit_from_tray(self):
         """
         Tepsi menüsündeki Çıkış buradan gelir. Pencereyi gösterip normal
@@ -1549,8 +1565,8 @@ class MainWindow(QMainWindow):
                 return
 
         if not active:
-            # confirm_exit ayarı
-            if self.settings.get("confirm_exit", True):
+            # confirm_exit ayarı (güncelleme kurulumu için kapanırken sorma)
+            if self.settings.get("confirm_exit", True) and not getattr(self, "_updating", False):
                 if self._confirm_dialog(t("cikis"), t("cikis_soru"),
                                         btn_ok=t("evet_cik"), btn_cancel=t("hayir_cikma")):
                     self._persist_queue_on_exit()

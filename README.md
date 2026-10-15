@@ -12,6 +12,7 @@ A Windows desktop application focused on downloading YouTube videos and audio as
 - Dark / Light theme
 - Windows toast notifications
 - Automatic FFmpeg installation with SHA-256 verification (requires internet connection)
+- In-app updates: new versions are downloaded, verified and installed with one click; the app restarts itself
 - Automatic yt-dlp (download engine) updates in the background, checked daily; active after restart
 - Drag & drop queue reordering
 - Download speed graph and speed limiter

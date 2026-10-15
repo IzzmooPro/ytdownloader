@@ -2,7 +2,6 @@
 """UpdateService — GitHub Releases API üzerinden güncelleme kontrolü (PyQt6)."""
 
 import threading
-import webbrowser
 import urllib.request
 import urllib.error
 import json
@@ -115,89 +114,8 @@ class UpdateService(QObject):
 
     def _on_update_found(self, parent, latest_version: str, release_info: dict) -> None:
         """Güncelleme bulundu — dialog burada açılır, ana thread garantili."""
-        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
-        from PyQt6.QtCore import Qt
-        from ytdownloader.ui.qt.theme import theme_manager
-
-        p = theme_manager.palette
-        html_url = release_info.get("html_url", "")
-
-        dlg = QDialog(parent)
-        dlg.setWindowTitle("Güncelleme Mevcut")
-        dlg.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint)
-        dlg.setFixedWidth(360)
-        dlg.setStyleSheet(f"""
-            QDialog {{
-                background: {p.bg_elevated};
-                border: 1px solid {p.border};
-                border-radius: 12px;
-            }}
-            QLabel#title {{
-                color: {p.text_primary};
-                font-size: 15px;
-                font-weight: 700;
-            }}
-            QLabel#sub {{
-                color: {p.text_secondary};
-                font-size: 12px;
-            }}
-            QPushButton#btn_dl {{
-                background: {p.accent};
-                color: #ffffff;
-                border: none;
-                border-radius: 7px;
-                font-size: 13px;
-                font-weight: 600;
-                padding: 0 20px;
-                height: 36px;
-                min-height: 36px;
-            }}
-            QPushButton#btn_dl:hover {{ background: {p.accent_hover}; }}
-            QPushButton#btn_later {{
-                background: transparent;
-                color: {p.text_secondary};
-                border: 1px solid {p.border};
-                border-radius: 7px;
-                font-size: 13px;
-                padding: 0 20px;
-                height: 36px;
-                min-height: 36px;
-            }}
-            QPushButton#btn_later:hover {{ background: {p.bg_hover}; }}
-        """)
-
-        lay = QVBoxLayout(dlg)
-        lay.setContentsMargins(24, 24, 24, 20)
-        lay.setSpacing(16)
-
-        lbl_title = QLabel(f"Yeni sürüm: v{latest_version}")
-        lbl_title.setObjectName("title")
-        lay.addWidget(lbl_title)
-
-        lbl_sub = QLabel(f"Mevcut sürümünüz: v{self.CURRENT_VERSION}\nGüncellemek için İndir'e tıklayın.")
-        lbl_sub.setObjectName("sub")
-        lbl_sub.setWordWrap(True)
-        lay.addWidget(lbl_sub)
-
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(10)
-
-        btn_later = QPushButton("Daha Sonra")
-        btn_later.setObjectName("btn_later")
-        btn_later.setFixedHeight(36)
-        btn_later.clicked.connect(dlg.reject)
-        btn_row.addWidget(btn_later)
-
-        btn_dl = QPushButton("İndir")
-        btn_dl.setObjectName("btn_dl")
-        btn_dl.setFixedHeight(36)
-        btn_dl.clicked.connect(dlg.accept)
-        btn_row.addWidget(btn_dl)
-
-        lay.addLayout(btn_row)
-
-        if dlg.exec() == QDialog.DialogCode.Accepted and html_url:
-            webbrowser.open(html_url)
+        from ytdownloader.ui.qt.update_dialog import UpdateDialog
+        UpdateDialog(parent, latest_version, self.CURRENT_VERSION, release_info).exec()
 
     def _on_show_info(self, parent, text: str) -> None:
         """Bilgi mesajı — ana thread garantili."""

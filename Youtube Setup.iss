@@ -1,7 +1,7 @@
 ; YouTube İndirici — Inno Setup Script
 
 #define MyAppName "YouTube İndirici"
-#define MyAppVersion "1.2.1"
+#define MyAppVersion "1.2.2"
 #define MyAppPublisher "IzzmooPro"
 #define MyAppURL "https://github.com/IzzmooPro/ytdownloader"
 #define MyAppExeName "YouTube Indirici.exe"
@@ -80,3 +80,8 @@ end;
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+; Uygulama içi güncelleme sessiz kurulum yapar (/SILENT) — bitince programı
+; yeniden aç. runasoriginaluser: kurulum yönetici olarak çalışsa da program
+; normal kullanıcı yetkisiyle açılır (yönetici olarak açılırsa tarayıcıdan
+; sürükle-bırak gibi özellikler Windows tarafından engellenir).
+Filename: "{app}\{#MyAppExeName}"; Flags: nowait runasoriginaluser; Check: WizardSilent
