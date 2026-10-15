@@ -14,8 +14,10 @@ Thread güvenliği:
   - EventBus üzerinden UI haberdar edilir
 """
 
+import gc
 import os
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable, Optional
@@ -32,6 +34,11 @@ from ytdownloader.utils.file_utils import is_ffmpeg_available, find_ffmpeg_dir
 from ytdownloader.core.retry_engine import RetryEngine, RetryConfig
 
 log = get_logger("download_engine")
+
+
+# İptalde kilitli kalan yarım dosyalar için yeniden deneme (toplam ~3 sn)
+_PARTIAL_DELETE_ATTEMPTS = 7
+_PARTIAL_DELETE_DELAY_S  = 0.5
 
 
 class _DownloadCancelledError(Exception):
@@ -346,16 +353,33 @@ class DownloadEngine:
             candidates = list(planned.parent.iterdir())
         except OSError:
             return
-        for f in candidates:
-            name = f.name
-            if not name.startswith(prefix):
-                continue
-            if name.endswith(".part") or name.endswith(".ytdl") or ".part-Frag" in name:
+        targets = [
+            f for f in candidates
+            if f.name.startswith(prefix)
+            and (f.name.endswith(".part") or f.name.endswith(".ytdl") or ".part-Frag" in f.name)
+        ]
+        # Parçalı (frag) indirmelerde yt-dlp iptal sonrası ana .part dosyasını
+        # hemen kapatmaz; dosya nesnesi çöp toplanana kadar açık kalır ve
+        # Windows silmeye izin vermez (WinError 32). gc + kısa bekleme ile
+        # birkaç kez yeniden denenir — worker thread'deyiz, UI etkilenmez.
+        for attempt in range(_PARTIAL_DELETE_ATTEMPTS):
+            remaining = []
+            for f in targets:
                 try:
                     f.unlink()
-                    log.debug(f"[{item.id}] Yarım dosya silindi: {name}")
+                    log.debug(f"[{item.id}] Yarım dosya silindi: {f.name}")
+                except FileNotFoundError:
+                    pass
                 except OSError as e:
-                    log.warning(f"[{item.id}] Yarım dosya silinemedi ({name}): {e}")
+                    remaining.append((f, e))
+            if not remaining:
+                return
+            targets = [f for f, _ in remaining]
+            if attempt < _PARTIAL_DELETE_ATTEMPTS - 1:
+                gc.collect()
+                time.sleep(_PARTIAL_DELETE_DELAY_S)
+        for f, e in remaining:
+            log.warning(f"[{item.id}] Yarım dosya silinemedi ({f.name}): {e}")
 
     def _make_postprocessor_hook(self, item: DownloadItem) -> Callable:
         """FFmpeg aşaması başlayınca işaretler — bu aşamada pause reddedilir."""
