@@ -1023,6 +1023,11 @@ class VideoCard(QFrame):
 
     def _apply_completed(self, success: bool, result):
         """Ana thread'de çalışır."""
+        # Kullanıcı iptali (kartı kaldırma / listeyi temizleme) hata değildir:
+        # "İndirme Hatası" bildirimi gösterme, kartı sessizce başa al.
+        if isinstance(result, dict) and result.get("status") == "cancelled":
+            self._reset()
+            return
         if success:
             self.progress_bar.setValue(100)
             self.lbl_pct.setText("%100")
@@ -1063,7 +1068,7 @@ class VideoCard(QFrame):
             self.lbl_error.setVisible(True)
             if self.settings.get("notify_error", True):
                 self.notification_center.show(
-                    "❌ " + get_i18n().t("indirme_hatasi"),
+                    get_i18n().t("indirme_hatasi"),   # ❌ ikonunu bildirim kendisi ekler
                     self.full_title,
                     "error"
                 )

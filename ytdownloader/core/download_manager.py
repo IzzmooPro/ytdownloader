@@ -271,7 +271,8 @@ class DownloadManager:
                 _unsub_all()
                 with self._downloads_lock:
                     self.downloads.pop(download_id, None)
-                complete_callback(False, "İndirme iptal edildi")
+                # Hata değil — kart bunu ayırt edip bildirim göstermez
+                complete_callback(False, {"status": "cancelled"})
 
         def on_error(data: dict):
             if data.get("id") == download_id:
