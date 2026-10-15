@@ -120,6 +120,8 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "gecmis_temizlenemedi": "Geçmiş temizlenemedi.",
         "ytdlp_guncelle": "İndirme Motorunu Güncelle (yt-dlp)",
         "motor_guncellendi_baslik": "İndirme Motoru Güncellendi",
+        "zaten_listede_baslik": "Video Zaten Listede",
+        "zaten_listede_govde": "Bu video indirme listesinde zaten var.",
         "motor_guncellendi_govde": "Yeni yt-dlp sürümü indirildi. Programı yeniden başlatınca devreye girer.",
     },
     "en": {
@@ -226,6 +228,8 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "gecmis_temizlenemedi": "Couldn't clear history.",
         "ytdlp_guncelle": "Update Download Engine (yt-dlp)",
         "motor_guncellendi_baslik": "Download Engine Updated",
+        "zaten_listede_baslik": "Video Already in List",
+        "zaten_listede_govde": "This video is already in the download list.",
         "motor_guncellendi_govde": "A new yt-dlp version was downloaded. It takes effect after restarting the app.",
     },
     "es": {
@@ -321,6 +325,8 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "gecmis_temizlenemedi": "No se pudo limpiar el historial.",
         "ytdlp_guncelle": "Actualizar motor de descarga (yt-dlp)",
         "motor_guncellendi_baslik": "Motor de descarga actualizado",
+        "zaten_listede_baslik": "El video ya está en la lista",
+        "zaten_listede_govde": "Este video ya está en la lista de descargas.",
         "motor_guncellendi_govde": "Se descargó una nueva versión de yt-dlp. Se activará al reiniciar la aplicación.",
     },
     "fr": {
@@ -416,6 +422,8 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "gecmis_temizlenemedi": "Impossible d'effacer l'historique.",
         "ytdlp_guncelle": "Mettre à jour le moteur (yt-dlp)",
         "motor_guncellendi_baslik": "Moteur de téléchargement mis à jour",
+        "zaten_listede_baslik": "Vidéo déjà dans la liste",
+        "zaten_listede_govde": "Cette vidéo est déjà dans la liste de téléchargement.",
         "motor_guncellendi_govde": "Une nouvelle version de yt-dlp a été téléchargée. Elle sera active après le redémarrage.",
     },
     "de": {
@@ -511,6 +519,8 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "gecmis_temizlenemedi": "Verlauf konnte nicht gelöscht werden.",
         "ytdlp_guncelle": "Download-Engine aktualisieren (yt-dlp)",
         "motor_guncellendi_baslik": "Download-Engine aktualisiert",
+        "zaten_listede_baslik": "Video bereits in der Liste",
+        "zaten_listede_govde": "Dieses Video ist bereits in der Download-Liste.",
         "motor_guncellendi_govde": "Eine neue yt-dlp-Version wurde heruntergeladen. Sie wird nach einem Neustart aktiv.",
     },
     "ja": {
@@ -606,6 +616,8 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "gecmis_temizlenemedi": "履歴をクリアできませんでした。",
         "ytdlp_guncelle": "ダウンロードエンジンを更新 (yt-dlp)",
         "motor_guncellendi_baslik": "ダウンロードエンジンを更新しました",
+        "zaten_listede_baslik": "動画はすでにリストにあります",
+        "zaten_listede_govde": "この動画はすでにダウンロードリストにあります。",
         "motor_guncellendi_govde": "新しい yt-dlp をダウンロードしました。アプリを再起動すると有効になります。",
     },
     "pt": {
@@ -701,6 +713,8 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "gecmis_temizlenemedi": "Não foi possível limpar o histórico.",
         "ytdlp_guncelle": "Atualizar motor de download (yt-dlp)",
         "motor_guncellendi_baslik": "Motor de download atualizado",
+        "zaten_listede_baslik": "Vídeo já está na lista",
+        "zaten_listede_govde": "Este vídeo já está na lista de downloads.",
         "motor_guncellendi_govde": "Uma nova versão do yt-dlp foi baixada. Ela entra em vigor após reiniciar o aplicativo.",
     },
 }

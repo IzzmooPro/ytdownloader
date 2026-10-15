@@ -775,15 +775,25 @@ class MainWindow(QMainWindow):
                 return
 
         added = 0
+        existing = None
         for url in urls:
             valid, _ = validate_youtube_url(url)
             if not valid:
                 continue
-            if self._find_card(url):
+            found = self._find_card(url)
+            if found:
+                existing = existing or found
                 continue
             self._add_card(url)
             added += 1
-        if added == 0:
+        if added == 0 and existing:
+            # Geçerli link ama zaten listede — "geçersiz URL" demek yanıltıcıydı
+            self._scroll_to_card(existing)
+            self.notification_center.show(
+                "ℹ " + self._t("zaten_listede_baslik"),
+                self._t("zaten_listede_govde"), "info"
+            )
+        elif added == 0:
             self.notification_center.show(
                 self._t("gecersiz_url"), self._t("pano_url_yok"), "warning"
             )
@@ -1216,8 +1226,8 @@ class MainWindow(QMainWindow):
             self._tabs.setCurrentIndex(0)
             self._scroll_to_card(existing)
             self.notification_center.show(
-                "ℹ Video Zaten Listede",
-                "Bu video indirme kuyruğunda zaten mevcut.",
+                "ℹ " + self._t("zaten_listede_baslik"),
+                self._t("zaten_listede_govde"),
                 "info"
             )
         else:
