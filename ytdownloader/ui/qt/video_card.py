@@ -702,43 +702,9 @@ class VideoCard(QFrame):
                 self.cmb_resolution.setCurrentIndex(idx)
 
     def _parse_formats(self, formats: list):
-        # Standart çözünürlükler — YouTube'un garip değerlerini en yakına yuvarla
-        STANDARD = [144, 240, 360, 480, 720, 1080, 1440, 2160, 4320]
-
-        def snap_to_standard(h):
-            """Yüksekliği en yakın standart değere yuvarla (±20% tolerans)."""
-            if not h:
-                return None
-            closest = min(STANDARD, key=lambda s: abs(s - h))
-            # Tolerans: standart değerin %25'i kadar sapma kabul et
-            if abs(closest - h) <= closest * 0.25:
-                return closest
-            return None
-
-        res_map = {}   # "1080p" -> (format_id, tbr)
-        for f in formats:
-            h    = f.get("height") or 0
-            fmt_id = f.get("format_id", "")
-            vcodec = f.get("vcodec", "none")
-            tbr    = f.get("tbr") or 0
-
-            if not fmt_id or not h:
-                continue
-            if not vcodec or vcodec in ("none", ""):
-                continue
-
-            snapped = snap_to_standard(h)
-            if snapped is None:
-                continue
-
-            key = f"{snapped}p"
-            # Aynı çözünürlük için en yüksek bitrate'li formatı sakla
-            if key not in res_map or tbr > res_map[key][1]:
-                res_map[key] = (fmt_id, tbr)
-
-        sorted_res = sorted(res_map.keys(), key=lambda x: int(x[:-1]))
-        self.resolution_list = sorted_res
-        self.format_options  = {k: v[0] for k, v in res_map.items()}
+        from ytdownloader.utils.format_utils import pick_video_formats
+        self.format_options  = pick_video_formats(formats)
+        self.resolution_list = sorted(self.format_options, key=lambda x: int(x[:-1]))
         self._update_quality_combo()
 
     # ── Format Seçimi ─────────────────────────────────────────────────────────
