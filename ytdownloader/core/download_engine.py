@@ -16,6 +16,7 @@ Thread güvenliği:
 
 import gc
 import os
+import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -497,6 +498,9 @@ class DownloadEngine:
             # dosyasına devam etmesini / üzerine yazmasını önler.
             "outtmpl":               str(Path(item.output_dir) / "%(title)s [%(id)s].%(ext)s"),
             "windowsfilenames":      True,   # Windows'ta yasak karakterleri güvenli temizle
+            # Format testi (_check_formats) geçici dosyayı paths["temp"] yoksa
+            # çalışma dizinine yazar — kurulu programda Program Files → Errno 13
+            "paths":                 {"temp": tempfile.gettempdir()},
         }
 
         # Cookie auth (tarayıcıdan veya cookie dosyasından)
