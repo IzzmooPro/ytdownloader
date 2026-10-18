@@ -5,7 +5,7 @@ Hiçbir şey import etmez — bağımlılık zincirinin en altı.
 """
 
 APP_NAME = "YouTube İndirici"
-APP_VERSION = "1.2.2"
+APP_VERSION = "1.2.3"
 APP_AUTHOR = "IzzmooPro"
 
 # Ayar dizini adı (OS'a göre tam yol infrastructure/settings_service.py'de hesaplanır)

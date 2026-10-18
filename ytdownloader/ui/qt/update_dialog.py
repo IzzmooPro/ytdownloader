@@ -215,8 +215,11 @@ class UpdateDialog(QDialog):
     # ── Kurulum ──────────────────────────────────────────────────────────────
 
     def _install(self):
-        """Kurulumu kaydet ve uygulamayı normal kapanış akışıyla kapat."""
-        app_updater.set_pending_installer(self._file)
+        """Kurulumu başlat (UAC burada, pencere öndeyken), sonra uygulamayı kapat."""
+        if not app_updater.start_installer(self._file):
+            self._lbl_err.setText(self._t("guncelleme_izin_yok"))
+            self._lbl_err.setVisible(True)
+            return
         self.accept()
         # Güncelleme "Hakkında" penceresinden açıldıysa o da açık — açık bir
         # pencere kalırsa uygulama kapanmaz. Hepsini kapat, sonra çık.
@@ -234,7 +237,7 @@ def _quit_app_for_update() -> None:
     if window is None:
         QApplication.quit()
         return
-    # Aktif indirme onayında "Hayır" denirse kurulum iptal edilir
+    # Aktif indirme onayında "Hayır" denirse kurulum, süreç kapanmadığı için
+    # bekleme süresi dolunca kendiliğinden vazgeçer (Youtube Setup.iss)
     if not window.quit_for_update():
         log.info("Güncelleme kurulumu kullanıcı tarafından ertelendi")
-        app_updater.set_pending_installer(None)

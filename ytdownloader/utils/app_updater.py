@@ -5,18 +5,16 @@ Uygulama içi güncelleme — kurulum dosyasını indir, doğrula, kur.
 Akış:
   1. GitHub release bilgisinden kurulum (.exe) dosyası seçilir.
   2. %TEMP% altına indirilir; boyut ve (GitHub verdiyse) SHA-256 doğrulanır.
-  3. Kullanıcı "Kur ve Yeniden Başlat" derse yol kaydedilir, uygulama normal
-     kapanış akışıyla kapanır (kuyruk diske yazılır, worker'lar durur).
-  4. main.py çıkışta launch_pending_installer() çağırır: küçük bir PowerShell
-     süreci bu işlemin bitmesini bekler, sonra kurulumu sessiz modda başlatır.
-     Kurulum betiği ([Run], Check: WizardSilent) bitince programı yeniden açar.
+  3. Kullanıcı "Kur ve Yeniden Başlat" derse kurulum hemen yönetici olarak
+     başlatılır (UAC onayı program öndeyken görünür), /WAITPID ile bu sürecin
+     bitmesini bekler; uygulama normal kapanış akışıyla kapanır.
+  4. Kurulum sessiz modda biter, [Run] (Check: WizardSilent) programı yeniden açar.
 
 Qt'ye bağımlı değildir — UI tarafı ui/qt/update_dialog.py'dedir.
 """
 
 import hashlib
 import os
-import subprocess
 import tempfile
 import threading
 import urllib.request
@@ -32,9 +30,6 @@ log = get_logger("app_updater")
 INSTALLER_ARGS = ["/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART"]
 
 _CHUNK = 256 * 1024
-
-# Kullanıcı "Kur ve Yeniden Başlat" dediğinde doldurulur; main.py çıkışta okur.
-_pending_installer: Path | None = None
 
 
 class UpdateCancelled(Exception):
@@ -147,60 +142,33 @@ def download_installer(asset: dict, version: str,
 
 # ── Kurulum ──────────────────────────────────────────────────────────────────
 
-def set_pending_installer(path: Path | None) -> None:
-    global _pending_installer
-    _pending_installer = path
-
-
-def get_pending_installer() -> Path | None:
-    return _pending_installer
-
-
-def _ps_quote(s: str) -> str:
-    """PowerShell tek tırnaklı dize — içindeki ' iki kez yazılır."""
-    return "'" + s.replace("'", "''") + "'"
-
-
-def build_install_command(installer: Path, wait_pid: int) -> list[str]:
+def build_installer_params(installer: Path, wait_pid: int) -> str:
     """
-    Bu süreç kapanana kadar bekleyip kurulumu başlatan PowerShell komutu.
-    Program Files'a kurulduğu için kurulum UAC onayı ister; yeniden açılış
-    kurulum betiğinde runasoriginaluser ile normal kullanıcı yetkisiyle yapılır.
+    /WAITPID: kurulum bu süreç kapanana kadar bekler (Youtube Setup.iss).
+    Süreç kapanmazsa (kullanıcı vazgeçti) kurulum hiçbir şey yapmadan çıkar.
     """
-    args = ",".join(_ps_quote(a) for a in INSTALLER_ARGS)
-    script = (
-        f"Wait-Process -Id {int(wait_pid)} -Timeout 120 -ErrorAction SilentlyContinue; "
-        f"Start-Process -FilePath {_ps_quote(str(installer))} -ArgumentList {args}"
-    )
-    return [
-        "powershell.exe", "-NoProfile", "-NonInteractive",
-        "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
-        "-Command", script,
-    ]
+    log_file = installer.with_suffix(".log")
+    return " ".join([*INSTALLER_ARGS, f"/WAITPID={int(wait_pid)}", f'/LOG="{log_file}"'])
 
 
-def launch_pending_installer() -> bool:
+def start_installer(installer: Path, wait_pid: int | None = None) -> bool:
     """
-    main.py çıkışta çağırır. Bekleyen kurulum varsa ayrık bir süreçle başlatır.
-    Returns: başlatıldıysa True.
+    Kurulumu başlatır; kurulum yönetici iznini (UAC) kendisi ister. Program
+    pencereleri hâlâ öndeyken çağrılmalı: Windows, arka plandaki bir süreçten
+    istenen UAC onayını öne getirmez, görev çubuğunda yanıp sönen simge bırakır.
+    "runas" kullanılmaz — kurulum baştan yönetici başlarsa [Run]
+    runasoriginaluser etkisiz kalır ve program yönetici olarak açılır.
+
+    Returns: kurulum başladıysa True.
     """
-    installer = _pending_installer
-    if installer is None:
-        return False
     if not installer.exists():
         log.error(f"Kurulum dosyası bulunamadı: {installer}")
         return False
-    cmd = build_install_command(installer, os.getpid())
-    flags = 0
-    if os.name == "nt":
-        flags = (subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-                 | subprocess.CREATE_NO_WINDOW)
-    try:
-        subprocess.Popen(cmd, creationflags=flags, close_fds=True,
-                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL)
-    except OSError as e:
-        log.error(f"Kurulum başlatılamadı: {e}")
+    params = build_installer_params(installer, wait_pid or os.getpid())
+    import ctypes
+    rc = ctypes.windll.shell32.ShellExecuteW(None, "open", str(installer), params, None, 1)
+    if rc <= 32:
+        log.warning(f"Kurulum başlatılamadı (ShellExecute={rc})")
         return False
-    log.info(f"Kurulum başlatılıyor (program kapandıktan sonra): {installer}")
+    log.info(f"Kurulum başlatıldı, program kapanınca devam edecek: {installer}")
     return True

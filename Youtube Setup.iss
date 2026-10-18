@@ -1,7 +1,7 @@
 ; YouTube İndirici — Inno Setup Script
 
 #define MyAppName "YouTube İndirici"
-#define MyAppVersion "1.2.2"
+#define MyAppVersion "1.2.3"
 #define MyAppPublisher "IzzmooPro"
 #define MyAppURL "https://github.com/IzzmooPro/ytdownloader"
 #define MyAppExeName "YouTube Indirici.exe"
@@ -54,7 +54,25 @@ turkish.RemoveUserData=Ayarlar, indirme geçmişi ve gömülü FFmpeg de silinsi
 function InitializeSetup(): Boolean;
 var
   ResultCode: Integer;
+  WaitPid: String;
 begin
+  // Uygulama içi güncelleme /WAITPID=<pid> verir: program kuyruğu diske yazıp
+  // kendisi kapanana kadar bekle. Kapanmazsa (kullanıcı vazgeçti) kurma.
+  WaitPid := ExpandConstant('{param:WAITPID|}');
+  if WaitPid <> '' then
+  begin
+    Exec('powershell.exe',
+      '-NoProfile -NonInteractive -Command "Wait-Process -Id ' + WaitPid +
+      ' -Timeout 300 -ErrorAction SilentlyContinue; if (Get-Process -Id ' + WaitPid +
+      ' -ErrorAction SilentlyContinue) { exit 1 }"',
+      '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    if ResultCode <> 0 then
+    begin
+      Log('Program kapanmadı, güncelleme iptal edildi');
+      Result := False;
+      exit;
+    end;
+  end;
   Exec('taskkill.exe', '/F /IM "{#MyAppExeName}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Sleep(1200);
   Result := True;

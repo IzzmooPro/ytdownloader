@@ -88,18 +88,11 @@ class TestDownload:
         assert not list(tmp_path.glob("*.exe*"))
 
 
-class TestInstallCommand:
-    def test_waits_for_pid_then_runs_silent_installer(self, tmp_path):
-        cmd = au.build_install_command(tmp_path / "Setup.exe", 4242)
-        script = cmd[-1]
-        assert cmd[0] == "powershell.exe"
-        assert "Wait-Process -Id 4242" in script
-        assert "'/SILENT'" in script and "Start-Process" in script
+class TestInstallParams:
+    def test_silent_waits_for_pid_and_logs(self, tmp_path):
+        params = au.build_installer_params(tmp_path / "Setup.exe", 4242)
+        assert "/SILENT" in params and "/WAITPID=4242" in params
+        assert f'/LOG="{tmp_path / "Setup.log"}"' in params
 
-    def test_quotes_paths_with_apostrophes(self, tmp_path):
-        script = au.build_install_command(tmp_path / "O'Brien" / "Setup.exe", 1)[-1]
-        assert "O''Brien" in script
-
-    def test_launch_without_pending_is_noop(self):
-        au.set_pending_installer(None)
-        assert au.launch_pending_installer() is False
+    def test_missing_installer_not_started(self, tmp_path):
+        assert au.start_installer(tmp_path / "yok.exe", 1) is False

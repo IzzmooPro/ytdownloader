@@ -225,14 +225,6 @@ def main():
     except Exception:
         pass
 
-    # "Kur ve Yeniden Başlat" seçildiyse: bu süreç bitince kurulum başlar,
-    # kurulum bitince program yeniden açılır (Youtube Setup.iss → [Run]).
-    try:
-        from ytdownloader.utils.app_updater import launch_pending_installer
-        launch_pending_installer()
-    except Exception as e:
-        log.error(f"Güncelleme kurulumu başlatılamadı: {e}")
-
     sys.exit(exit_code)
 
 
