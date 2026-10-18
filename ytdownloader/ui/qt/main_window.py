@@ -1217,6 +1217,7 @@ class MainWindow(QMainWindow):
         changed = 0
         for card in self.cards:
             if card.download_state == "idle" and card._format != fmt:
+                card._format_chosen_by_user = True
                 card._format = fmt
                 card.btn_format.setText(f"{fmt} ▾")
                 card._update_quality_combo()

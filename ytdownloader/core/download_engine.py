@@ -16,7 +16,6 @@ Thread güvenliği:
 
 import gc
 import os
-import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -40,6 +39,28 @@ log = get_logger("download_engine")
 # İptalde kilitli kalan yarım dosyalar için yeniden deneme (toplam ~3 sn)
 _PARTIAL_DELETE_ATTEMPTS = 7
 _PARTIAL_DELETE_DELAY_S  = 0.5
+
+# Yarım dosyalar (.part, .part-FragN, .ytdl) çıktı klasöründeki bu gizli alt
+# klasöre yazılır: paralel parçalı indirmede masaüstü onlarca dosyayla dolmasın.
+# Aynı sürücüde kalır (C: dolmaz, bitince taşıma anlık); yol sabit olduğu için
+# program yeniden açılınca kaldığı yerden devam edilir.
+PARTS_DIR_NAME = ".yt-indirici-gecici"
+
+
+def _parts_dir(output_dir: str) -> Path:
+    d = Path(output_dir) / PARTS_DIR_NAME
+    d.mkdir(parents=True, exist_ok=True)
+    if os.name == "nt":
+        import ctypes
+        ctypes.windll.kernel32.SetFileAttributesW(str(d), 0x2)  # FILE_ATTRIBUTE_HIDDEN
+    return d
+
+
+def _remove_parts_dir_if_empty(output_dir: str) -> None:
+    try:
+        (Path(output_dir) / PARTS_DIR_NAME).rmdir()
+    except OSError:
+        pass        # başka indirmenin parçaları var ya da klasör yok
 
 
 def _progress_percent(d: dict) -> float:
@@ -268,6 +289,7 @@ class DownloadEngine:
             log.error(f"[{item.id}] Worker beklenmeyen hata: {e}", exc_info=True)
             self._sm.set_error(item.id, str(e))
         finally:
+            _remove_parts_dir_if_empty(item.output_dir)
             self.cleanup(item.id)
             # Worker bitti — kayıt artık gerekmiyor; StateManager'da birikmesin.
             self._sm.unregister(item.id)
@@ -295,8 +317,8 @@ class DownloadEngine:
                 info = ydl.extract_info(item.url, download=False)
                 filename = ydl.prepare_filename(info)
 
-                # .part yolunu state'e kaydet
-                item.partial_file = filename + ".part"
+                # .part yolunu state'e kaydet (gizli parça klasöründe)
+                item.partial_file = ydl.prepare_filename(info, "temp") + ".part"
 
                 ydl.download([item.url])
 
@@ -496,11 +518,12 @@ class DownloadEngine:
             "postprocessor_hooks":   [self._make_postprocessor_hook(item)],
             # [%(id)s] eki: aynı başlıklı farklı videoların birbirinin .part
             # dosyasına devam etmesini / üzerine yazmasını önler.
-            "outtmpl":               str(Path(item.output_dir) / "%(title)s [%(id)s].%(ext)s"),
+            "outtmpl":               "%(title)s [%(id)s].%(ext)s",
             "windowsfilenames":      True,   # Windows'ta yasak karakterleri güvenli temizle
-            # Format testi (_check_formats) geçici dosyayı paths["temp"] yoksa
-            # çalışma dizinine yazar — kurulu programda Program Files → Errno 13
-            "paths":                 {"temp": tempfile.gettempdir()},
+            # home: bitmiş dosya. temp: yarım dosyalar ve format testi (temp
+            # verilmezse çalışma dizinine, yani Program Files'a yazar → Errno 13)
+            "paths":                 {"home": str(item.output_dir),
+                                      "temp": str(_parts_dir(item.output_dir))},
             # YouTube https formatları tek bağlantıyla iner; "dashy" onları
             # parçalara böler, parçalar paralel iner (ölçüm: ~12 → ~15 MB/s).
             "extractor_args":        {"youtube": {"formats": ["dashy"]}},

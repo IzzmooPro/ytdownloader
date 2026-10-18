@@ -242,17 +242,23 @@ class VideoCard(QFrame):
         fmt_row = QHBoxLayout()
         fmt_row.setSpacing(8)
 
-        self.btn_format = QPushButton("MP3 ▾")
+        # Varsayılan format kart açılır açılmaz gösterilir; bilgi gelince
+        # yeniden uygulanırsa kullanıcının bu arada yaptığı seçim ezilirdi.
+        self._format = "MP4" if str(self.settings.get("default_format", "MP3")).upper() == "MP4" else "MP3"
+        self._format_chosen_by_user = False
+        self.btn_format = QPushButton(f"{self._format} ▾")
         self.btn_format.setObjectName("btn_icon")
         self.btn_format.setFixedHeight(26)
         self.btn_format.clicked.connect(self._toggle_format)
-        self._format = "MP3"
         fmt_row.addWidget(self.btn_format)
 
         self.cmb_resolution = QComboBox()
         self.cmb_resolution.setFixedHeight(26)
-        self.cmb_resolution.addItems(["128 kbps", "192 kbps", "320 kbps"])
-        self.cmb_resolution.setCurrentIndex(2)
+        if self._format == "MP3":
+            self.cmb_resolution.addItems(["128 kbps", "192 kbps", "320 kbps"])
+            self.cmb_resolution.setCurrentIndex(2)
+        else:
+            self.cmb_resolution.setEnabled(False)   # çözünürlükler bilgi gelince dolar
         self.cmb_resolution.setEnabled(True)
         self._apply_resolution_style()
         fmt_row.addWidget(self.cmb_resolution)
@@ -688,7 +694,10 @@ class VideoCard(QFrame):
             )
             self._show_playlist_banner(playlist_title, meta_kind)
 
-        # Playlist'ten gelen preset format/quality varsa uygula, yoksa ayarlardan al
+        # Playlist'ten gelen preset format/quality varsa uygula, yoksa ayarlardan al.
+        # Kullanıcı bilgi yüklenirken formatı değiştirdiyse seçimine dokunma.
+        if self._format_chosen_by_user:
+            return
         settings = self.settings_manager.load()
         preset_fmt = getattr(self, "_preset_format", None) or settings.get("default_format", "MP3")
         preset_qty = getattr(self, "_preset_quality", None) or settings.get("default_quality", "320 kbps")
@@ -710,6 +719,7 @@ class VideoCard(QFrame):
     # ── Format Seçimi ─────────────────────────────────────────────────────────
 
     def _toggle_format(self):
+        self._format_chosen_by_user = True
         self._format = "MP4" if self._format == "MP3" else "MP3"
         self.btn_format.setText(f"{self._format} ▾")
         self._update_quality_combo()
