@@ -70,6 +70,26 @@ def _get_install_dir(base_path: Path) -> Path:
     return Path(appdata) / "MyYouTubeDownloader" / "ffmpeg"
 
 
+_REQUIRED_EXES = ("ffmpeg.exe", "ffprobe.exe")
+
+
+def remove_leftovers(install_dir: Path) -> int:
+    """
+    Kullanılmayan ffplay.exe'yi ve yarıda kalmış indirmelerin zip'lerini siler
+    (indirme sürerken program kapanırsa daemon thread'ler temizleyemez).
+    Returns: silinen bayt.
+    """
+    freed = 0
+    for p in [install_dir / "ffplay.exe", *install_dir.glob("_ffmpeg_tmp_*.zip")]:
+        try:
+            size = p.stat().st_size
+            p.unlink()
+            freed += size
+        except OSError:
+            pass
+    return freed
+
+
 def download_and_install(base_path, progress_callback=None, done_callback=None):
     """
     Tüm kaynakları paralel başlatır.
@@ -166,7 +186,7 @@ def download_and_install(base_path, progress_callback=None, done_callback=None):
             if progress_callback:
                 progress_callback(82, "Çıkartılıyor...")
 
-            exe_names = {"ffmpeg.exe", "ffprobe.exe", "ffplay.exe"}
+            exe_names = set(_REQUIRED_EXES)
             found = set()
             with zipfile.ZipFile(tmp_zip, "r") as zf:
                 for member in zf.namelist():
@@ -178,7 +198,7 @@ def download_and_install(base_path, progress_callback=None, done_callback=None):
                         if progress_callback:
                             progress_callback(
                                 85 + len(found) * 4,
-                                f"{fname} kuruldu ({len(found)}/3)"
+                                f"{fname} kuruldu ({len(found)}/{len(exe_names)})"
                             )
             _cleanup(tmp_zip)
 

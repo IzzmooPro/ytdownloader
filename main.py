@@ -68,6 +68,21 @@ except Exception as e:
     sys.exit(1)
 
 
+def _cleanup_leftovers() -> None:
+    """Eski sürümlerden kalan gereksiz dosyalar (tek instance garanti edildikten sonra)."""
+    import shutil
+    from ytdownloader.utils.ffmpeg_installer import _get_install_dir, remove_leftovers
+    freed = remove_leftovers(_get_install_dir(_root))
+    if freed:
+        log.info(f"Gereksiz FFmpeg dosyaları silindi ({freed / 1048576:.0f} MB)")
+    # Kaldırılan YouTube sekmesinin (WebEngine) profil ve önbelleği
+    for name in ("browser_profile", "browser_profile_cache"):
+        d = _log_dir.parent / name
+        if d.is_dir():
+            shutil.rmtree(d, ignore_errors=True)
+            log.info(f"Eski YouTube sekmesi verisi silindi: {d}")
+
+
 def main():
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
@@ -135,6 +150,7 @@ def main():
     download_manager = DownloadManager(settings_manager, _base)
 
     _step(4, 0.05)
+    _cleanup_leftovers()
     _ffmpeg_ok = is_ffmpeg_available(_base)
     log.info("FFmpeg: " + ("MEVCUT" if _ffmpeg_ok else "YOK — arka planda kuruluyor"))
 

@@ -1,6 +1,15 @@
 # -*- coding: utf-8 -*-
 """ffmpeg_installer checksum çözümleme testleri (ağ kullanılmaz)."""
 
+
+def test_remove_leftovers_keeps_required_exes(tmp_path):
+    from ytdownloader.utils.ffmpeg_installer import remove_leftovers
+    for name in ("ffmpeg.exe", "ffprobe.exe", "ffplay.exe", "_ffmpeg_tmp_0.zip", "_ffmpeg_tmp_2.zip"):
+        (tmp_path / name).write_bytes(b"x" * 10)
+    assert remove_leftovers(tmp_path) == 30
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["ffmpeg.exe", "ffprobe.exe"]
+    assert remove_leftovers(tmp_path) == 0
+
 import pytest
 
 from ytdownloader.utils import ffmpeg_installer as fi
