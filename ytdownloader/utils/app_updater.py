@@ -165,6 +165,10 @@ def start_installer(installer: Path, wait_pid: int | None = None) -> bool:
         log.error(f"Kurulum dosyası bulunamadı: {installer}")
         return False
     params = build_installer_params(installer, wait_pid or os.getpid())
+    # Kurulum (ve onun yeniden açtığı program) ortam değişkenlerimizi devralır;
+    # PyInstaller onefile bunları görünce kapanırken silinen eski _MEI
+    # klasöründe python313.dll arar → "Failed to load Python DLL".
+    os.environ["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
     import ctypes
     rc = ctypes.windll.shell32.ShellExecuteW(None, "open", str(installer), params, None, 1)
     if rc <= 32:

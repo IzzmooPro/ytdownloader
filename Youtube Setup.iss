@@ -1,7 +1,7 @@
 ; YouTube İndirici — Inno Setup Script
 
 #define MyAppName "YouTube İndirici"
-#define MyAppVersion "1.3.0"
+#define MyAppVersion "1.3.1"
 #define MyAppPublisher "IzzmooPro"
 #define MyAppURL "https://github.com/IzzmooPro/ytdownloader"
 #define MyAppExeName "YouTube Indirici.exe"
@@ -102,4 +102,7 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 ; yeniden aç. runasoriginaluser: kurulum yönetici olarak çalışsa da program
 ; normal kullanıcı yetkisiyle açılır (yönetici olarak açılırsa tarayıcıdan
 ; sürükle-bırak gibi özellikler Windows tarafından engellenir).
-Filename: "{app}\{#MyAppExeName}"; Flags: nowait runasoriginaluser; Check: WizardSilent
+; PYINSTALLER_RESET_ENVIRONMENT: kurulumu başlatan eski program ortam
+; değişkenlerini devretmiştir; yeni program bunlarla açılırsa silinmiş eski
+; _MEI klasöründe python313.dll arar ve "Failed to load Python DLL" verir.
+Filename: "{cmd}"; Parameters: "/c set PYINSTALLER_RESET_ENVIRONMENT=1&& start """" ""{app}\{#MyAppExeName}"""; Flags: nowait runasoriginaluser runhidden; Check: WizardSilent
