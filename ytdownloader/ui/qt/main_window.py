@@ -21,7 +21,6 @@ from ytdownloader.ui.qt.playlist_dialog import PlaylistDialog
 from ytdownloader.services.update_service import UpdateService
 from ytdownloader.services.ytdlp_update_service import YtdlpUpdateService
 from ytdownloader.ui.qt.tray_icon import TrayIcon
-from ytdownloader.ui.qt.youtube_tab import YouTubeTab
 from ytdownloader.services.i18n_service import get_i18n
 from ytdownloader.infrastructure.logger import get_logger
 from ytdownloader.utils.url_utils import validate_youtube_url
@@ -388,16 +387,6 @@ class MainWindow(QMainWindow):
         # ── Sekme 0: İndirme Yöneticisi (ana sekme) ──────────────────────────
         self._tabs.addTab(manager_widget, self._t("tab_indirme_yoneticisi"))
 
-        # ── Sekme 1: YouTube (yardımcı keşif aracı) ──────────────────────────
-        self._youtube_tab = YouTubeTab(settings_service=self.settings_manager)
-        self._youtube_tab.video_detected.connect(self._on_youtube_video_detected)
-        self._tabs.addTab(self._youtube_tab, "YouTube")
-        self._tabs.setTabToolTip(1,
-            "Video keşfet, bağlantıyı al ve indirme listesine ekle.\n"
-            "Oturum kalıcılığı garanti edilmez — giriş gerektiren işlemler için\n"
-            "sistem tarayıcınızı kullanın."
-        )
-
         # Status bar
         self._status_bar = QStatusBar()
         self._status_bar.setObjectName("statusbar")
@@ -716,9 +705,6 @@ class MainWindow(QMainWindow):
         self._apply_tab_style(tab_bg, tab_active_bg, tab_hover_bg,
                                tab_passive_clr, tab_active_clr, tab_hover_clr,
                                tab_border, accent)
-
-        if hasattr(self, "_youtube_tab"):
-            self._youtube_tab.apply_theme(theme_manager.current)
 
     def _apply_theme(self):
         QApplication.instance().setStyleSheet(theme_manager.stylesheet())
@@ -1219,27 +1205,6 @@ class MainWindow(QMainWindow):
             self._i18n = get_i18n(new_lang)
             self.retranslate()
 
-    def _on_youtube_video_detected(self, url: str):
-        """YouTube sekmesinden gelen video URL'sini ekle ve sekmeyi değiştir."""
-        existing = self._find_card(url)
-        if existing:
-            self._tabs.setCurrentIndex(0)
-            self._scroll_to_card(existing)
-            self.notification_center.show(
-                self._t("zaten_listede_baslik"),
-                self._t("zaten_listede_govde"),
-                "info"
-            )
-        else:
-            self._add_card(url)
-            self._tabs.setCurrentIndex(0)
-            self.notification_center.show(
-                self._t("video_eklendi_baslik"),
-                self._t("video_eklendi_govde"),
-                "success"
-            )
-
-
     def _show_auth_dialog(self):
         """Tarayıcı cookie / oturum yönetimi dialog'u."""
         from ytdownloader.ui.qt.auth_dialog import AuthDialog
@@ -1348,12 +1313,6 @@ class MainWindow(QMainWindow):
                 ("Listeyi Temizle", "Tüm kartları kaldırır"),
                 ("Çift Tıklama", "Kart üzerinde: İndirmeyi başlat / Duraklat / Devam et"),
                 ("Sağ Tık", "Kart üzerinde: İndir, Sil, Konum Seç"),
-            ]),
-            ("▶  YouTube Sekmesi", [
-                ("YouTube", "Yardımcı sekmede video keşfetmenizi sağlar"),
-                ("İndirme Yöneticisine Ekle", "Mevcut videoyu indirme listesine ekler"),
-                ("Tarayıcıda Aç", "Mevcut sayfayı sistem tarayıcısında açar"),
-                ("Sağ Tık (Video)", "Videoyu indirme listesine gönderir"),
                 ("Shorts", "YouTube Shorts videoları da indirilebilir"),
             ]),
             ("⚙  Ayarlar", [

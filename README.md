@@ -19,7 +19,6 @@ A Windows desktop application focused on downloading YouTube videos and audio as
 - Playlist support (select individual videos)
 - Download history
 - System tray integration
-- Helper YouTube tab for discovering videos and sending them to the download list
 - Playlist / Mix selection support with searchable picking dialog
 
 ---
@@ -36,11 +35,11 @@ A Windows desktop application focused on downloading YouTube videos and audio as
 
 **Requirements:**
 - Python 3.11 – 3.13
-- PyQt6, PyQt6-WebEngine, yt-dlp, certifi, mutagen
+- PyQt6, yt-dlp, certifi, mutagen
 
 **Install dependencies:**
 ```bash
-pip install pyqt6 pyqt6-webengine yt-dlp certifi mutagen
+pip install pyqt6 yt-dlp certifi mutagen
 ```
 
 **Run:**

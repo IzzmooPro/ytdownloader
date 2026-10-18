@@ -501,6 +501,10 @@ class DownloadEngine:
             # Format testi (_check_formats) geçici dosyayı paths["temp"] yoksa
             # çalışma dizinine yazar — kurulu programda Program Files → Errno 13
             "paths":                 {"temp": tempfile.gettempdir()},
+            # YouTube https formatları tek bağlantıyla iner; "dashy" onları
+            # parçalara böler, parçalar paralel iner (ölçüm: ~12 → ~15 MB/s).
+            "extractor_args":        {"youtube": {"formats": ["dashy"]}},
+            "concurrent_fragment_downloads": 8,
         }
 
         # Cookie auth (tarayıcıdan veya cookie dosyasından)

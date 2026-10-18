@@ -1,7 +1,7 @@
 ; YouTube İndirici — Inno Setup Script
 
 #define MyAppName "YouTube İndirici"
-#define MyAppVersion "1.2.4"
+#define MyAppVersion "1.3.0"
 #define MyAppPublisher "IzzmooPro"
 #define MyAppURL "https://github.com/IzzmooPro/ytdownloader"
 #define MyAppExeName "YouTube Indirici.exe"
